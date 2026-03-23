@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>えーじゃないわよ - Final</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        #game-wrapper { width: 1280px; height: 720px; transform-origin: center center; display: flex; justify-content: center; align-items: center; position: relative; }
+        #game-container { position: relative; width: 1280px; height: 720px; background: #000; cursor: pointer; overflow: hidden; z-index: 10; }
+        #background { position: absolute; width: 100%; height: 100%; background-size: cover; background-position: center; transition: background-image 1.5s, filter 2s; }
+        #character-container { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); height: 90%; width: 100%; display: flex; justify-content: center; align-items: flex-end; pointer-events: none; }
+        #character { height: 100%; transition: opacity 0.8s, transform 1s; opacity: 0; }
+        #message-box { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 1150px; height: 200px; background: rgba(0, 0, 0, 0.85); border: 2px solid #fff; color: #fff; padding: 25px; box-sizing: border-box; font-size: 26px; line-height: 1.5; z-index: 10; transition: opacity 1s; }
+        #name-tag { position: absolute; top: -45px; left: 0; background: #fff; color: #000; padding: 5px 25px; font-weight: bold; font-size: 22px; display: none; }
+        #text-display { white-space: pre-wrap; }
+        
+        .white-out { filter: brightness(5) !important; transition: filter 4s ease-in !important; }
+        .hospital-wake { filter: sepia(0.2) brightness(1.2) !important; }
+
+        /* エンドロール用スタイル */
+        #credits-layer { 
+            position: absolute; top: 0; left: 0; width: 1280px; height: 720px; 
+            background: #000; display: none; z-index: 20; overflow: hidden; color: #fff; font-family: serif; 
+        }
+        #credits-container { position: absolute; top: 720px; width: 100%; text-align: center; }
+        .role { font-size: 24px; color: #aaa; margin-top: 60px; letter-spacing: 0.1em; }
+        .name { font-size: 38px; color: #fff; margin-top: 10px; font-weight: bold; letter-spacing: 0.2em; }
+        .credit-title { font-size: 48px; margin-bottom: 100px; margin-top: 100px; color: #fff; border-bottom: 1px solid #fff; display: inline-block; padding-bottom: 10px; }
+        #final-message { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 32px; opacity: 0; text-align: center; }
+
+        @keyframes scrollCredits {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-2300px); }
+        }
+        .animate-scroll { animation: scrollCredits 25s linear forwards; }
+        .fade-in-text { animation: fadeIn 3s ease 23s forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <div id="game-container">
+        <div id="background"></div>
+        <div id="character-container">
+            <img id="character" src="">
+        </div>
+        <div id="message-box">
+            <div id="name-tag"></div>
+            <div id="text-display"></div>
+        </div>
+    </div>
+
+    <div id="credits-layer">
+        <div id="credits-container">
+            <div class="credit-title">えーじゃないわよ。</div>
+            <div class="role">作画</div>
+            <div class="name">上野がんま</div>
+            <div class="role">シナリオ</div>
+            <div class="name">上野がんま</div>
+            <div class="role">作曲</div>
+            <div class="name">上野がんま</div><div class="role">プログラム</div>
+            <div class="name">上野がんま</div><div class="role">⠀</div>
+            <div class="name">⠀</div>
+            <div class="role">総監督</div>
+            <div class="name">上野がんま</div>
+            <div style="margin-top: 300px;"></div>
+            <div class="role">CAST</div>
+            <div class="name">天野べーた</div>
+            <div class="name">あなた</div>
+            <div style="margin-top: 400px;"></div>
+            <div class="name">Thank you for Playing.</div>
+        </div>
+        <div id="final-message">またね。</div>
+    </div>
+</div>
+
+<script>
+    function resizeGame() {
+        const wrapper = document.getElementById('game-wrapper');
+        const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+        wrapper.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeGame);
+    resizeGame();
+
+    const faceMap = {
+        'ｎ': 'photo/beta_normal.png', 'ｈ': 'photo/beta_hohoemu.png', 'ｋ': 'photo/beta_sad.png',
+        'ｄ': 'photo/beta_angry.png', 'ｂ': 'photo/beta_hazukasi.png', 'ｚ': 'photo/beta_broken.png',
+        'ｆ': 'photo/beta_fukigen.png', 'ｐ': 'photo/beta_nothing.png', 'w': 'photo/beta_hohoemu.png'
+    };
+
+    const rawScenario = [
+        { bgm: "music/nostalgia.wav", text: "「･･･よし」" },
+        { text: "完成したパズルはかつて過ごした青春の塊のような、そんな一枚になった。" },
+        { showChar: true, name: "べーた", text: "なに感慨深そうに眺めてるのよ。これからでしょ？ｈ" },
+        { text: "べーたの声に周囲を見渡す。" },
+        { bg: "photo/bg_station.jpg", bgm: "music/kamome.wav", text: "海の見える、誰も居ない駅のホーム。止まっている電車。" },
+        { text: "俺と天野べーたはふたりっきりでそこにいた。" },
+        { text: "「･･･もう、行くのか？」" },
+        { name: "べーた", text: "えぇ。" },
+        { name: "べーた", text: "まぁ、私が行くと言うより、あなたが進むだけよ。ｈ" },
+        { text: "べーたは海を見ながらそう言う。" },
+        { text: "「寂しくなるな。」" },
+        { name: "べーた", text: "･･ｑ" },
+        { text: "彼女はくるりと回転して、俺の胸に顔を埋める。ｑ" },
+        { text: "暖かい吐息がシャツ越しに伝わる。" },
+        { name: "べーた", text: "次にあんたと会うときは、私は別の次元体になっているでしょうね。" },
+        { text: "何を言っているのかわからないけどとりあえず、あぁ、と返しておく。" },
+        { se: "se/train_bell.wav", text: "すると、電車の発車ベルが鳴り響いた。" },
+        { name: "べーた", text: "ま、これ以上尺を使いすぎるとイライラする人が出てくるでしょうしね。ｈ" },
+        { text: "「難しすぎる片付けとか、クッサい台詞吐いた辺りで脱落してるよ、そんなヤツ。」" },
+        { text: "ひとしきり２人で笑う。" },
+        { name: "べーた", text: "ね、ｈ" },
+        { text: "「ん？」" },
+        { name: "べーた", text: "最後にひとつだけ───ｑ" },
+        { bgm: "music/muon.wav", se: "se/muon.wav", text: "────" },
+        { text: "─" },
+        { text: "「･･･」" },
+        { bgm: "music/kamome.wav", text: "俺が何も言えないでいるとべーたはまたくるりと回転して電車に乗り込む。ｑ" },
+        { text: "顔は見えない。" },
+        { name: "べーた", text: "ったく、反応悪いわね･･･ｎ" },
+        { name: "べーた", text: "ま、あんたとの生活も悪くはなかったわ。ｈ" },
+        { name: "べーた", text: "あっちでも精々頑張りなさい。ｎ" },
+        { text: "俺は正気に戻って弾かれたようにこう問う。" },
+        { text: "「また、･･･また会えるか？？」" },
+        { se: "se/door_close.wav", text: "電車のドアが空気の抜けるような音と共に閉まり始める" },
+        { showChar: true, name: "べーた", text: "べーたは最後にこちらを振り向いてこう言った。ｈ" },
+        { bgm: "music/muon.wav", type: "white", name: "べーた", text: "「またね。」ｑ" },
+        { se: "se/door_closed.wav", text: "＿＿ｑ" },
+        { se: "se/pipi.wav", bg: "none", text: "ピッ、ピッ、ピッ、ピッ、ピッ、ピ･･････" },
+        { bg: "photo/hospital_ceiling.jpg", type: "wake", text: "規則正しい電子音に眼が覚める。" },
+        { text: "ゆっくりと瞼を開くと、見知らぬ天井が見えた。" },
+        { text: "消毒液の香りが遅れて漂ってくる。" },
+        { text: "すると、そばにいた人物が俺の様子に気がつき、何か物を落す" },
+        { text: "そうして、ばたばたと駆けながら誰かを呼びに行った。" },
+        { se: "se/muon.wav", text: "…" },
+        { se: "se/muon.wav", text: "………。" },
+        { se: "se/muon.wav", text: "…えー。" }
+    ];
+
+    let currentStep = 0;
+    let charIndex = 0;
+    let isTyping = false;
+    let typingTimer;
+    let currentFace = ''; 
+    let charVisible = false;
+    let currentBgmPath = "";
+    
+    const bgmAudio = new Audio();
+    bgmAudio.loop = true;
+    const seAudio = new Audio();
+
+    const bgEl = document.getElementById('background');
+    const charEl = document.getElementById('character');
+    const nameEl = document.getElementById('name-tag');
+    const textEl = document.getElementById('text-display');
+    const container = document.getElementById('game-container');
+
+    function update() {
+        const step = rawScenario[currentStep];
+        
+        if (!step) {
+            startCredits();
+            return;
+        }
+
+        if (step.se === "se/muon.wav") {
+            bgmAudio.pause();
+            seAudio.pause();
+            currentBgmPath = "music/muon.wav";
+        } else {
+            if (step.bgm && step.bgm !== currentBgmPath) {
+                currentBgmPath = step.bgm;
+                bgmAudio.pause();
+                if (step.bgm !== "music/muon.wav") {
+                    bgmAudio.src = step.bgm;
+                    bgmAudio.play().catch(() => {});
+                }
+            }
+            if (step.se) {
+                seAudio.pause();
+                seAudio.src = step.se;
+                seAudio.play().catch(() => {});
+            }
+        }
+
+        if (step.bg === "none") {
+            bgEl.style.transition = "none";
+            bgEl.style.backgroundImage = "none";
+            bgEl.style.backgroundColor = "#000";
+            setTimeout(() => { bgEl.style.transition = "background-image 1.5s, filter 2s"; }, 50);
+        } else if (step.bg) {
+            bgEl.style.backgroundImage = `url(${step.bg})`;
+        }
+        
+        let rawText = step.text || "";
+        const lastChar = rawText.slice(-1);
+
+        if (faceMap[lastChar]) {
+            currentFace = faceMap[lastChar];
+            rawText = rawText.slice(0, -1);
+            charVisible = true;
+        } else if (lastChar === 'ｑ' || lastChar === 'q') {
+            charVisible = false;
+            rawText = rawText.slice(0, -1);
+        }
+
+        charEl.src = currentFace;
+        charEl.style.opacity = charVisible ? "1" : "0";
+        nameEl.textContent = step.name || "";
+        nameEl.style.display = step.name ? "block" : "none";
+        
+        if (step.type === "white") {
+            bgEl.classList.add('white-out');
+            document.getElementById('message-box').style.opacity = "0.5";
+        }
+        if (step.type === "wake") {
+            bgEl.classList.remove('white-out');
+            bgEl.classList.add('hospital-wake');
+            document.getElementById('message-box').style.opacity = "1";
+        }
+
+        startTyping(rawText);
+    }
+
+    function startTyping(text) {
+        clearInterval(typingTimer);
+        charIndex = 0;
+        textEl.innerText = "";
+        isTyping = true;
+        typingTimer = setInterval(() => {
+            if (charIndex < text.length) {
+                textEl.innerText += text[charIndex++];
+            } else {
+                clearInterval(typingTimer);
+                isTyping = false;
+            }
+        }, 50);
+    }
+
+    function startCredits() {
+        container.style.display = "none"; // ゲーム画面を隠す
+        const layer = document.getElementById('credits-layer');
+        layer.style.display = "block";
+        
+        // BGM切り替え
+        bgmAudio.pause();
+        bgmAudio.src = 'music/genso.wav';
+        bgmAudio.loop = false;
+        bgmAudio.play().catch(() => {});
+
+        // アニメーション開始
+        document.getElementById('credits-container').classList.add('animate-scroll');
+        document.getElementById('final-message').classList.add('fade-in-text');
+    }
+
+    container.onclick = () => {
+        if (isTyping) {
+            clearInterval(typingTimer);
+            isTyping = false;
+            let t = rawScenario[currentStep].text;
+            const last = t.slice(-1);
+            if (faceMap[last] || last === 'q' || last === 'ｑ') t = t.slice(0,-1);
+            textEl.innerText = t;
+        } else {
+            currentStep++;
+            update();
+        }
+    };
+
+    update();
+</script>
+</body>
+</html>

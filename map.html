@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>えーじゃないわよ- Prologue</title>
+    <style>
+        /* ベースの背景と配置 */
+        body { 
+            margin: 0; 
+            background: #000; 
+            overflow: hidden; 
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        /* ゲーム全体を包むラッパー（ここでスケーリングを行う） */
+        #game-wrapper {
+            width: 1280px;
+            height: 720px;
+            transform-origin: center center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 元のゲームコンテナ設定 */
+        #game-container { 
+            position: relative; 
+            width: 1280px; 
+            height: 720px; 
+            background: #000; 
+            cursor: pointer; 
+            flex-shrink: 0;
+        }
+
+        #background { position: absolute; width: 100%; height: 100%; background-size: cover; background-position: center; transition: background-image 0.8s; opacity: 1; }
+        #character-container { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); height: 90%; width: 100%; display: flex; justify-content: center; align-items: flex-end; pointer-events: none; }
+        #character { height: 100%; transition: opacity 0.3s; opacity: 0; }
+        #message-box { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 1150px; height: 200px; background: rgba(0, 0, 0, 0.85); border: 2px solid #fff; color: #fff; padding: 25px; box-sizing: border-box; font-size: 26px; line-height: 1.5; z-index: 10; }
+        #name-tag { position: absolute; top: -45px; left: 0; background: #fff; color: #000; padding: 5px 25px; font-weight: bold; font-size: 22px; display: none; }
+        #choices { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); display: none; flex-direction: column; gap: 15px; z-index: 20; }
+        .choice-btn { width: 450px; padding: 15px; background: #fff; border: 2px solid #000; cursor: pointer; font-size: 20px; font-weight: bold; text-align: center; }
+        .choice-btn:hover { background: #ff0000; color: #fff; }
+        
+        .quake { animation: quake 0.1s infinite; }
+        @keyframes quake { 0% { transform: translate(0,0); } 25% { transform: translate(-8px,8px); } 50% { transform: translate(8px,-8px); } 75% { transform: translate(-8px,-8px); } 100% { transform: translate(8px,8px); } }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <div id="game-container">
+        <div id="background"></div>
+        <div id="character-container">
+            <img id="character" src="photo/beta_normal.png">
+        </div>
+        <div id="message-box">
+            <div id="name-tag"></div>
+            <div id="text-display"></div>
+        </div>
+        <div id="choices"></div>
+    </div>
+</div>
+
+<script>
+    // --- スケーリング処理 (片付けゲームのロジックを採用) ---
+    function resizeGame() {
+        const wrapper = document.getElementById('game-wrapper');
+        const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+        wrapper.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeGame);
+    resizeGame();
+    // --------------------------------------------------
+
+    const faceMap = {
+        'ｎ': 'photo/beta_normal.png', 'ｈ': 'photo/beta_hohoemu.png', 'ｋ': 'photo/beta_sad.png',
+        'ｄ': 'photo/beta_angry.png', 'ｂ': 'photo/beta_hazukasi.png', 'ｚ': 'photo/beta_broken.png',
+        'ｆ': 'photo/beta_fukigen.png', 'ｑ': 'photo/beta_nothing.png',
+        'n': 'photo/beta_normal.png', 'h': 'photo/beta_hohoemu.png', 'k': 'photo/beta_sad.png',
+        'd': 'photo/beta_angry.png', 'b': 'photo/beta_hazukasi.png', 'z': 'photo/beta_broken.png',
+        'f': 'photo/beta_fukigen.png', 'q': 'photo/beta_nothing.png'
+    };
+
+    const rawScenario = [
+        { text: "……っ、頭が…" },
+        { text: "……ここは……" },
+        { text: "どこだ………" },
+        { bg: "photo/bg_museum_normal.jpg", bgm: "music/genso.wav",text: "冷たい革ソファの感触。" },
+        { text: "咳止めドロップと新聞紙をしばらく一緒に引き出しに入れておいたような匂い。" },
+        { text: "ぼやけた視界の先に、誰かが見える。" },
+        { showChar: true, name: "べーた", text: "･･･あら、ようやく起きたのね。ｎ" },
+        { name: "べーた", text: "ずいぶん長い間寝ていたわよ？ｎ" },
+        { name: "べーた", text: "･･･ｎ" },
+        { name: "べーた", text: "･･･あら、そんなに怯えないで。食べたりはしないわよ。ｈ" },
+        { type: "choice", options: ["１、貴女は、誰？", "２，ここは、どこ？"], 
+          branches: [
+            [{ name: "べーた", text: "私の名前は, 天野べーた。この美術館の管理をしているわ。ｎ" }],
+            [{ name: "べーた", text: "ここは美術館よ。私の名前は、天野べーた。管理人よ。ｎ" }]
+          ]
+        },
+        { text: "美術館と聞いて辺りを見渡す。" },
+        { text: "確かに寝そべっているソファの真横には大きな絵画が飾られている。" },
+        { name: "べーた", text: "･･･この絵ね、良いでしょう？なんだかこちらまで楽しくなってこない？ｈ" },
+        { text: "そこにあったのは、人と人成らざるものが１つの卓に集合している楽しげな絵。" },
+        { text: "超カラフルな最後の晩餐、とでも言えようか。" },
+        { text: "美術館に飾るには少々斬新なタッチではあるが。" },
+        { name: "べーた", text: "ここの左下に私も写っているのよ。ほら、ここｈ" },
+        { text: "べーたによく似た女性が、卓上の端末画面に写っている。" },
+        { text: "いや、そんなことはどうでもいい。何故俺はここにいるのだろう。" },
+        { text: "「なんで俺は、ここに？」" },
+        { text: "「何も、覚えてないんですけど･･･どうやってここに来たのかを。」" },
+        { text: "もしかしてどこかで倒れていたところを運ばれたのだろうか。" },
+        { name: "べーた", text: "･･･あなたがのぞんで来たのでしょう？ｎ" },
+        { text: "「･･･え？」" },
+        { text: "俺がこの美術館に自ら足を運んだというのだろうか。" },
+        { text: "いや、そんなことはないはずだ。俺はそういうタチではない。" },
+        { text: "「すみません･･･ここは何県ですか？」" },
+        { text: "とりあえず現在地はどこなんだ？" },
+        { name: "べーた", text: "県？ここはそんなものに属していないわ。ｎ" },
+        { text: "ますます訳が分からない。" },
+        { text: "日本語は通じているし、まるっきり別の国というわけでもなかろう。" },
+        { text: "「･･･えっと･･･。とりあえず、電話か何かありますか？家に連絡したいので。」" },
+        { name: "べーた", text: "･･･はぁ、あんたね。ここは──f" },
+        { type: "quake", bgm: "music/muon.wav", text: "グラグラッ！！！！" },
+        { text: "「！？」q" },
+        { text: "急に地面が揺れ出した。" },
+        { text: "「な、地震！？」" },
+        { text: "かなり大きい。" },
+        { text: "額縁は逃げ出すように暴れ、照明が踊り、俺たちの影が右往左往する。" },
+        { type: "quake", se:"se/quake.wav",text: "ゴゴゴゴ･･･" },
+        { bgm: "music/genso.wav", text: "地響きと共に揺れは収まった。" },
+        { text: "バクバクと脈打つ心臓をなだめて、伏せていた頭を上げる。" },
+        { text: "幸い、何も被害はなさそうだ。" },
+        { text: "「怪我はないですか？」" },
+        { name: "べーた", text: "えぇ、平気。慣れてるもの。ｎ" },
+        { text: "「この辺りは地震が多いのか･･･」" },
+        { name: "べーた", text: "そうね。ｎ" },
+        { text: "「･･･」" },
+        { text: "･･･心なしか、べーたの表情が暗い。" },
+        { text: "平気な顔の裏で、実は強がっていたりするのだろうか。" },
+        { text: "「どうかしました？」" },
+        { name: "べーた", text: "いえ、なんでもないわ。ｎ" },
+        { name: "べーた", text: "私についてきて。ｎ" },
+        { text: "くるりと背を向けたべーたはコツコツと歩き出した。" },
+        { text: "寝転がっていて分からなかったが、彼女はメイド服を着ている。" },
+        { text: "彼女が回ったのに追従して、ひらひらのスカートが優雅に回転した。q" },
+        { text: "「･･･あ」" },
+        { text: "「ちょっ、待って！」" },
+        { text: "急いで身体を起こした俺はべーたの後を追いかけた。" },
+        { text: "やたら早歩きな彼女についていくと、なんだか重苦しい扉が見えてきた。" },
+        { se:"se/walk.wav",text: "それにしても、人っ子一人いない美術館だ。やたらと足音が響き渡る。" },
+        { text: "「今日は休館日なんですか？」" },
+        { name: "べーた", text: "違うわ。いつもこうよ。ｎ" },
+        { text: "「ずいぶん閑散としてるな」" },
+        { text: "経営が気になる。" },
+        { name: "べーた", text: "あ、ちょっと待ってね。ｎ" },
+        { text: "べーたはそそくさと壁にかけられた絵画に寄り、指でちょいちょい、と位置を整える。" },
+        { text: "「･･･ちゃんと管理してるんですね。」" },
+        { name: "べーた", text: "はぁ？私はここの管理人よ？あったりまえじゃない。f" },
+        { text: "得意げに胸を張るべーた。なんだかおかしくて笑ってしまう。" },
+        { name: "べーた", text: "な、なに笑ってんのよｆ" },
+        { text: "「なんだか親近感が沸いて。」" },
+        { name: "べーた", text: "･･･n" },
+        { text: "俺がそう言うとべーたは黙ってしまう。" },
+        { text: "「どうかしました？」" },
+        { name: "べーた", text: "･･･" },
+        { text: "問いかけてなお黙りこくる様子に、俺は顔をのぞき込もうとするが、" },
+        { text: "その前に彼女はほぅと息を吐いてこちらに視線をあげた。" },
+        { name: "べーた", text: "なんでもないわ。さ、行きましょ。ｈ" },
+        { text: "彼女はなんだか嬉そうな、それでいて悲しそうな顔をして、くるりと回転し扉へ向かう。q" },
+        { se: "se/door.wav",text: "staff only、そう書かれた扉がガチャリと開かれる。" },
+        { bg: "photo/bg_warehouse.jpg",text: "部屋の中はずいぶんと散らかっていた。倉庫だろうか。" },
+        { text: "埃っぽい匂いに包まれたそこには、ボロボロになった絵画や、彫刻が所狭しと並べられている。" },
+        { text: "奥へすすむべーたについて行くと、俺はある絵画に目を取られた。" },
+        { text: "比較的新しいその絵は山積みになった美術品の上に無造作に置かれている。" },
+        { bgm: "music/muon.wav", text: "「これは──。──っ！？」" },
+        { text: "俺が絵画に近づこうとすると、急に頭を殴られたような衝撃が走った。" },
+        { text: "家族写真のようにも思えるその絵を、俺の頭が明確に拒絶しているようにさえ思えた。" },
+        { text: "「っ･･･はぁ、はぁ･･･」" },
+        { text: "痛みに耐えながら俺はゆっくりと後退して、目を背ける。" },
+        { text: "その行為がまるで正解かと言わんばかりに傍の棚がきしんだ。" },
+        { text: "「なんだ･･･これは･･･」" },
+        { text: "不気味な感覚に襲われた俺は、逃げ出すようにしてべーたの後を追った。" },
+        { bgm: "music/genso.wav", name: "べーた", text: "これ、片付けなさい。ｎ" },
+        { text: "「え？」" },
+        { text: "追いついた俺にべーたは開口一番、そんなことを言い放った。" },
+        { text: "彼女がこれよ、と示すのは均等に並べられた美術品。" },
+        { text: "腰ほどの高さの棚にきっちりと骨董品がそろえられている。" },
+        { text: "「もう片付いてないですか？」" },
+        { name: "べーた", text: "ばっか。この袋につめるのよ。ｎ" },
+        { text: "どこから出したのか、手触りの堅い大きい袋を渡される。" },
+        { text: "「ほーん。･･･ってなんで俺が？」" },
+        { name: "べーた", text: "ほーんじゃないわ。いい？あんたの責任でもあるのよ？f" },
+        { text: "「･･･は？」" },
+        { name: "べーた", text: "いいからさっさとやる！" },
+        { text: "訳が分からなかった。" },
+        { text: "加えて、結局ここがなんなのか、なんでここに居るのかもわからないままだ。" },
+        { text: "だから、素直に聞き入れようという気は起きなかった。" },
+        { text: "「･･･というか、ここはどこなんだよ？」" },
+        { name: "べーた", text: "いいから、手を─f" },
+        { text: "少し荒くなった俺の口調にべーたの口が止まる。k" },
+        { text: "「あのさ、いつ帰れるんだ？俺は。何してたかもよくわかってないし─」" },
+        { bgm: "music/muon.wav", text: "続けざまに言った瞬間、空気が一気に張り詰めた。" },
+        { name: "べーた", text: "･･･あんた･･･『いつ帰れるか』ですって･･･？？ｚ" },
+        { text: "べーたが信じられないといった表情に変わる。" },
+        { text: "「あぁ。俺は何をしてたんだ？なんでここにいる？早く帰りたいんだよ。」" },
+        { bgm: "music/huon.wav", name: "べーた", text: "･･･っっ！！それはっ、あんたがっ！！！ｄ" },
+        { text: "勢いよく胸ぐらを掴まれ、彼女の爪が顎先をかすめる。" },
+        { text: "「痛っ･･･」" },
+        { text: "口をついてでたのはその言葉だが、俺の内心を占めていたのは初対面の相手に手を上げられたことへの驚きだった。" },
+        { text: "だから頭の中は思ったよりも冷静だった。" },
+        { text: "べーたの唇は白くなるほど噛み締められており、悲しみと怒りと絶望が塗り固められたような目をしている。" },
+        { text: "「･･･」" },
+        { bgm: "music/muon.wav", name: "べーた", text: "･･･あ、n" },
+        { text: "沈黙が続き、べーたはゆっくりと手を緩める。" },
+        { text: "緩まりきった腕は重力に従ってだらんと落下し、しばらく振り子運動を続けていた。" },
+        { text: "「･･･」" },
+        { name: "べーた", text: "･･･ｋ" },
+        { name: "べーた", text: "その･･･ごめん。ｋ" },
+        { text: "右腕をぎゅっと握りながら彼女はそう言う。" },
+        { text: "重い沈黙が流れる。" },
+        { text: "凍り付いた空気を溶かすように、俺は極めて落ち着いたトーンで話を始める。" },
+        { text: "「･･･。･･･俺は何故かここに至るまでの記憶が無い。」" },
+        { text: "「一体ここはどこで、べーた、お前は何者で、俺はなんでここにいるんだ。」" },
+        { text: "「それがわからないのに美術館の手伝いをしようという気持ちにはなれない。」" },
+        { name: "べーた", text: "･･･ｋ" },
+        { name: "べーた", text: "･･････こっちに来て。ｋ" },
+        { text: "べーたが目を伏せてゆっくりと歩き出す。q" },
+        { text: "俺はうなずいて後につく。" },
+        { text: "コツコツと足音を響かせながら着いた先は大きな窓だった。" },
+        { name: "べーた", text: "べーたはこちらへ振り向くと窓の外を見るように示す。ｎ" },
+        { text: "素直に従ってそちらへ目を向ける。" },
+        { text: "息を──呑んだ。q" },
+        { bg: "photo/bg_mu.jpg", bgm: "music/genso.wav", text: "「なんだ･･･これ･･･」" },
+        { text: "窓の外に広がっていたのは「無」だった。" },
+        { text: "瞳を閉じたときに瞼の裏に写る暗闇のような、" },
+        { text: "黒く汚れた筆をぐちゃぐちゃのパレットと一緒に洗ったときのような、" },
+        { text: "布団の中でスマホの電源を落としたときの一瞬の静寂のような、" },
+        { text: "とにかく俺は「無」だと思った。" },
+        { text: "真っ暗闇だとか真夜中だとかでは無い。「無」だ。" },
+        { bg: "photo/bg_warehouse.jpg", text: "「ど、どうしてこんな･･･」" },
+        { text: "動転して口がうまく回らない。" },
+        { text: "そんな俺を見てべーたはくすりと笑う" },
+        { name: "べーた", text: "あら、そんなに怖いのかしら？ｈ" },
+        { text: "正直なところ、怖い。" },
+        { text: "「だって、外が･･･」" },
+        { text: "俺は震える声でそう呟いた。" },
+        { name: "べーた", text: "信じられないかもしれないけれど、ここは、精神上の空間よ。ｎ" },
+        { text: "「せ、精神上？」" },
+        { name: "べーた", text: "えぇ。だからこうして必要の無い『外』は排除されてるの。ｎ" },
+        { text: "「で、でも、こうして触れるじゃないか･･･？」" },
+        { text: "俺はべーたの手を握る。" },
+        { text: "フツウ、初対面の女の子相手にこんなことはしない。" },
+        { text: "けど今は誰かに触れていないと自分が永遠にひとりぼっちになるような感じがした。" },
+        { name: "べーた", text: "ちょ、え、はぁ！？？ｂ" },
+        { text: "べーたの腕がビクゥと硬直する。" },
+        { name: "べーた", text: "あ、あんた何勝手に触ってんのよ？？！ｂ" },
+        { text: "「あ。あぁ。ごめん･･･」" },
+        { text: "慌てて腕を放す。" },
+        { name: "べーた", text: "せ、精神上って言っても、完全に存在しないわけじゃあないの！ｂ" },
+        { name: "べーた", text: "まぁ、半分だけ存在している、という方が正しいかしらね。ｂ" },
+        { name: "べーた", text: "その精神の持ち主がそう思えばそうなる。思わなければそうはならないのよ。f" },
+        { text: "「･･･」" },
+        { text: "「･･･じゃあ、その･･･ここの精神の持ち主は一体誰なんだ？」" },
+        { text: "ここが精神上の世界というのなら、当然その主人がいるはずだろう。" },
+        { name: "べーた", text: "･･･それは今私の口から言うことはできないわ。n" },
+        { text: "「･･･なんで？」" },
+        { name: "べーた", text: "持ち主自身がソレを望んでいるからよ。ｎ" },
+        { name: "べーた", text: "私がそいつのことを喋ろうものならこの世界ごと消えるリスクがある。それは避けたいでしょう？ｎ" },
+        { text: "確かにそれは避けるべき事態だろう." },
+        { text: "しかし、となると必然的に思いつくのは、" },
+        { text: "「俺は･･･生物では無く、」" },
+        { text: "「･･･ただの情報･･･ということになるのか･･･」" },
+        { name: "べーた", text: "そう思うなら、そうなんでしょうね。" },
+        { text: "べーたのやけにあっさりとした肯定に俺はすとんと納得してしまった。" },
+        { text: "「･･･俺は。なら俺はどうするのが正解なんだ？」" },
+        { name: "べーた", text: "はぁ･･･あんたバカぁ？f" },
+        { name: "べーた", text: "決まってるじゃない、さっきも言ったように片付けすんのよ片付け！！" },
+        { bgm: "music/muon.wav", text: "「･･･んで、俺はこれをこの袋に入れれば良いんだな？？」q" },
+        { bgm: "music/genso.wav", text: "さっきの倉庫に戻ってきた俺たちは、棚の前に立っていた。" },
+        { text: "自分の居場所が分からなくなってしまった俺は、彼女に従うことにしたのだ。" },
+        { name: "べーた", text: "ただ放り込めばいいわけじゃあないわ。n" },
+        { name: "べーた", text: "物事には必ず順番ってのがあるのよ。ｈ" },
+        { text: "「順番？」" },
+        { name: "べーた", text: "この美術品は正しい順番で片付けないと牙を向くの。ｎ" },
+        { name: "べーた", text: "この１２個の美術品をよく考えて袋につめなさい。" },
+        { text: "牙を向くって･･･。" },
+        { text: "「で、その正しい順番ってのはなんなんだ？」" },
+        { name: "べーた", text: "知らないわよ。" },
+        { text: "「は？」" },
+        { name: "べーた", text: "私が教えることではないわ。" },
+        { name: "べーた", text: "人間は誰しも失敗を「死ぬほど」繰り返して、やっと正解を選べるようになっていくのよ。" },
+        { text: "「え－。」" },
+        { name: "べーた", text: "えーじゃないわ。f" },
+        { name: "べーた", text: "あと･･･ただ片付けるだけじゃあないわ。ｈ" },
+        { name: "べーた", text: "鼓動を読むのよ。" },
+        { text: "「鼓動･･･？？」" },
+        { text: "訳の分からないことが２個も３個も増えていく。" },
+        { name: "べーた", text: "ま、とにかくやってみたら分かるわよ。n" },
+        { name: "べーた", text: "ほら、さっさと取りかかりなさい。" },
+        { text: "「はぁ･･･」" }
+    ];
+
+    let currentStep = 0;
+    let charIndex = 0;
+    let isTyping = false;
+    let typingTimer;
+    let currentFace = 'photo/beta_normal.png'; 
+    let charVisible = false;
+    let currentBgmPath = "";
+    const bgmAudio = new Audio();
+    bgmAudio.loop = true;
+    bgmAudio.preload = "auto";
+
+    bgmAudio.addEventListener('timeupdate', function() {
+        const buffer = 0.44;
+        if(this.currentTime > this.duration - buffer) {
+            this.currentTime = 0;
+            this.play();
+        }
+    });
+
+    const bgEl = document.getElementById('background');
+    const charEl = document.getElementById('character');
+    const nameEl = document.getElementById('name-tag');
+    const textEl = document.getElementById('text-display');
+    const choiceEl = document.getElementById('choices');
+    const container = document.getElementById('game-container');
+
+    function update() {
+        const step = rawScenario[currentStep];
+        if (!step) {
+            window.location.href = "kataduke.html";
+            return;
+        }
+
+        if (step.bgm && step.bgm !== currentBgmPath) {
+            currentBgmPath = step.bgm;
+            bgmAudio.pause();
+            bgmAudio.src = step.bgm;
+            bgmAudio.load();
+            bgmAudio.play().catch(() => {});
+        } else if (step.bgm === "music/muon.wav") {
+            bgmAudio.pause();
+            currentBgmPath = "music/muon.wav";
+        }
+
+        if (step.se) {
+            new Audio(step.se).play().catch(() => {});
+        }
+
+        if (step.bg) {
+            bgEl.style.backgroundImage = `url(${step.bg})`;
+        }
+
+        if (step.showChar) charVisible = true;
+
+        let rawText = step.text || "";
+        const lastChar = rawText.slice(-1);
+
+        if (faceMap[lastChar]) {
+            currentFace = faceMap[lastChar];
+            rawText = rawText.slice(0, -1);
+        }
+
+        charEl.src = currentFace;
+        charEl.style.opacity = charVisible ? "1" : "0";
+
+        nameEl.textContent = step.name || "";
+        nameEl.style.display = step.name ? "block" : "none";
+        
+        container.classList.toggle('quake', step.type === "quake");
+
+        startTyping(rawText, step);
+    }
+
+    function startTyping(text, step) {
+        clearInterval(typingTimer);
+        charIndex = 0;
+        textEl.innerText = "";
+        isTyping = true;
+        typingTimer = setInterval(() => {
+            if (charIndex < text.length) {
+                textEl.innerText += text[charIndex++];
+            } else {
+                clearInterval(typingTimer);
+                isTyping = false;
+                if (step.type === "choice") showChoices(step);
+            }
+        }, 40);
+    }
+
+    function showChoices(step) {
+        choiceEl.style.display = "flex";
+        choiceEl.innerHTML = "";
+        step.options.forEach((opt, index) => {
+            const btn = document.createElement('button');
+            btn.className = "choice-btn";
+            btn.textContent = opt;
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                choiceEl.style.display = "none";
+                rawScenario.splice(currentStep + 1, 0, ...step.branches[index]);
+                next();
+            };
+            choiceEl.appendChild(btn);
+        });
+    }
+
+    function next() {
+        if (isTyping) {
+            clearInterval(typingTimer);
+            isTyping = false;
+            let fullText = rawScenario[currentStep].text || "";
+            if (faceMap[fullText.slice(-1)]) fullText = fullText.slice(0, -1);
+            textEl.innerText = fullText;
+        } else {
+            currentStep++;
+            update();
+        }
+    }
+
+    container.onclick = () => {
+        if (bgmAudio.paused && currentBgmPath !== "" && currentBgmPath !== "music/muon.wav") bgmAudio.play();
+        if (rawScenario[currentStep]?.type === "choice") return;
+        next();
+    };
+
+    update();
+</script>
+</body>
+</html>

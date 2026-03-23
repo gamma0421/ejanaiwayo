@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>えーじゃないわよ - Map 4</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        #game-wrapper { width: 1280px; height: 720px; transform-origin: center center; display: flex; justify-content: center; align-items: center; }
+        #game-container { position: relative; width: 1280px; height: 720px; background: #000; cursor: pointer; overflow: hidden; }
+        #background { position: absolute; width: 100%; height: 100%; background-size: cover; background-position: center; transition: background-image 0.5s; }
+        #character-container { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); height: 90%; width: 100%; display: flex; justify-content: center; align-items: flex-end; pointer-events: none; }
+        #character { height: 100%; transition: opacity 0.3s; opacity: 0; }
+        #message-box { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 1150px; height: 200px; background: rgba(0, 0, 0, 0.85); border: 2px solid #fff; color: #fff; padding: 25px; box-sizing: border-box; font-size: 26px; line-height: 1.5; z-index: 10; }
+        #name-tag { position: absolute; top: -45px; left: 0; background: #fff; color: #000; padding: 5px 25px; font-weight: bold; font-size: 22px; display: none; }
+        #text-display { white-space: pre-wrap; }
+        #choices { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); display: none; flex-direction: column; gap: 15px; z-index: 20; }
+        .choice-btn { width: 450px; padding: 15px; background: #fff; border: 2px solid #000; cursor: pointer; font-size: 20px; font-weight: bold; text-align: center; }
+        .choice-btn:hover { background: #ff0000; color: #fff; }
+        .quake { animation: quake 0.1s infinite; }
+        @keyframes quake { 0% { transform: translate(2px, 2px); } 50% { transform: translate(-2px, -2px); } 100% { transform: translate(2px, -2px); } }
+        .flash { animation: flash 0.2s; }
+        @keyframes flash { 0% { background: #fff; } 100% { background: transparent; } }
+        .black-out { background: #000 !important; }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <div id="game-container">
+        <div id="background"></div>
+        <div id="character-container">
+            <img id="character" src="">
+        </div>
+        <div id="choices"></div>
+        <div id="message-box">
+            <div id="name-tag"></div>
+            <div id="text-display">……</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function resizeGame() {
+        const wrapper = document.getElementById('game-wrapper');
+        const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+        wrapper.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeGame);
+    resizeGame();
+
+    const faceMap = {
+        'n': 'photo/kyo_normal.png',
+        'k': 'photo/kyo_sad.png',
+        'd': 'photo/kyo_angry.png',
+        'h': 'photo/kyo_hohoemu.png',
+        'f': 'photo/kyo_fukigen.png',
+        'b': 'photo/kyo_hazukasi.png',  'p': 'photo/kyo_konwaku.png','z': 'photo/kyo_broken.png',
+        'bf': 'photo/beta_fukigen.png',
+        'q': 'photo/beta_nothing.png',
+        'bn': 'photo/beta_normal.png',
+        'bk': 'photo/beta_sad.png',
+        'bd': 'photo/beta_angry.png',
+        'bh': 'photo/beta_hohoemu.png',
+        'bz': 'photo/beta_broken.png',
+        'bb': 'photo/beta_hazukasi.png'
+    };
+
+    const rawScenario = [
+        { bg: "photo/bg_classroom_evening.jpg", bgm: "music/hoka.wav", text: "────キーンコーンカーンコーン。" },
+        { text: "赤い夕焼けの光が窓に差し込んでいる。" },
+        { text: "どうやら俺は机につっぷして寝ていたらしい。" },
+        { text: "放課後の静寂。外ではカラスが鳴いている。" },
+        { text: "教室を見渡す。" },
+        { text: "「･･･べーた･･･？」" },
+        { text: "かすれた声で読んでみるが返事は無い。" },
+        { text: "夢、だったのか。" },
+        { se: "se/pain.wav", text: "「･･･痛･･･」" },
+        { text: "鋭い痛みに襲われ、見ると、手のひらや足にはついさっきできたような傷があった。" },
+        { text: "「この怪我は･･･」" },
+        { text: "「･･･！」" },
+        { text: "はっと思い出して急いで窓に駆け寄る。" },
+        { text: "「これは･･･」" },
+        { text: "窓の外には「夕方」が広がっていた。" },
+        { text: "夕日が地平線に沈みかけていて、それを背にした街々は黒くそびえ立っている。" },
+        { text: "空には点々とカラスやら何やらが飛んでいた。" },
+        { se: "se/higu.wav", text: "「窓の外が･･･「在」る･･･」" },
+        { text: "薄い窓をからからと開けると、暖かい風にシャツがはためいた。" },
+        {  text: "なんとも寂しい鳴き声.ひぐらしが２，３匹鳴いている。" },
+        { text: "「ここは･･･現実なのか･･･？？」" },
+        { text: "しかしこの腕に残っている傷はなんだ？" },
+        { text: "加えて俺はまた、ここがどこかも、どうやってここに来たのかも分からないのだ。" },
+        { text: "とにかく、べーたに会いたい。べーたに会わなきゃ──" },
+        { bgm: "music/muon.wav", se: "se/door.wav", text: "ガチャッ" },
+        { text: "突然、教室の後ろのドアが開いた。" },
+        { text: "「！？」" },
+        { text: "俺は慌てて振り向く。" },
+        { name: "教師？", text: "『･･･お。なんだまだ残ってたのか。』" },
+        { name: "教師？", text: "『下校時間は過ぎてるぞ。とっとと帰れ。』" },
+        { se: "se/door_close.wav", text: "そう言い残すと、こっちの気など置いてけぼりにして、扉から顔を引っ込めて消えていった。" },
+        { text: "「･･･え、」" },
+        { text: "「･･･せん、先生･･････？」" },
+        { text: "状況から察するに放課後に見回っている教師だろう。" },
+        { text: "意表を突かれて固まっていた俺の脳は遅れてそう結論づけた。" },
+        { text: "天野べーた以外の人間は精神上の世界に存在できるのだろうか。" },
+        { text: "そうでなければここは現実となる。" },
+        { text: "いやしかし、それではこの怪我の説明がつかない･･･" },
+        { text: "再び深い思考の波に飲まれそうになった俺は、はたと正気に戻った。" },
+        { text: "「一旦外に出てみるか･･･」" },
+        { text: "べーたに会うためには、自分から動く必要がある。" },
+        {  se: "se/rustle.wav", text: "俺は自分の寝ていた机に置いてある、スクールかばんを背負って昇降口まで向かった。" },
+        { text: "＿" },
+        { text: "迷うかと思ったが、そんなことは無かった。" },
+        { se: "se/shoes.wav", text: "極めてすんなりと昇降口までたどり着いた俺は、" },
+        { text: "ただ１つだけ革靴の入っていた下駄箱からそれを取り出し、それを履いた。" },
+        { bgm:"music/kara.wav",bg: "photo/bg_school_gate.jpg", text: "慎重に外に出て、周囲を見渡したりしたが、特に何かあるわけでも無かった。" },
+        { text: "門の前を、小学生くらいの男の子が自転車で通り過ぎた。" },
+        { text: "道路には普通に車が走っている。" },
+        { text: "「人間がいる･･･」" },
+        { text: "最初は違和感こそあったが、門を出て右手。より建物が密集している方へ歩いて行くにつれてそんな感覚も薄れた。" },
+        { text: "当たり前に人々が闊歩し、時折笑い声なんかも聞こえる。すれ違ったじいさんに挨拶もされた。" },
+        { text: "「･･･」" },
+        { text: "やっぱりここは現実なんだという考えが強くなってきた。" },
+        { text: "あの美術館で起こった不可解な事象や、底冷えするような不安はここには無く、" },
+        { text: "ただ当たり前に存在している暖かい街が俺のことを包んでいる。" },
+        { text: "そう思うと、べーたに執着していた少し前の自分が恥ずかしいような、" },
+        { text: "彼女の暖かさや顔、声を思い出し、胸が締め付けられるような感覚もした。" },
+        { text: "だから、次の瞬間目に入ってきた光景に、俺の心臓は一気に跳ね上がった。" },
+        { bgm: "music/hoka.wav", text: "「べー･･･た？」" },
+        { showChar: true, name: "？？？", text: "先ほどまでメイド服を着ていた彼女は、見知らぬ学校の制服に身を包んで、道路の反対側を歩いていた。z" },
+        { text: "見違いでは無い。幻覚でも無い。歩き姿、風になびく髪、もちろん顔、そして表情。q" },
+        { text: "どれを取っても天野べーた、本人だった。" },
+        { text: "ついさっきまで彼女と一緒に居たのに、やけに懐かしく、やけに悲しく感じられた。" },
+        { se: "se/run.wav", text: "「べーた！！」" },
+        { text: "そう声を張り上げて、手を挙げて走り出す。" },
+        { text: "近くにいた通行人は驚いたようにこちらを見たが、そんなことはどうでもよかった。" },
+        { text: "かなり大きな声だったはずだが、べーたは気気に留めるそぶりもせず歩き続けていた。" },
+        { text: "聞こえていないのかな。" },
+        { text: "横断歩道も通らず、俺は彼女のもとへ駆ける。" },
+        { text: "「おい、べーた！」" },
+        { text: "なんだか反応が悪い、と思って彼女の進行方向に先回りして声をかけた。" },
+        { showChar: true, name: "？？？", text: "するとやっとこちらに顔をあげたべーたと目が合う。n" },
+        { text: "「はぁ･･･まったく、探したぞ･･･どこにいたんだよ。」k" },
+        { text: "「てか今度はどこなんだ？ここは──」" },
+        { text: "残りの言葉が紡ぎ出せなかった。" },
+        { text: "べーたは、俺などいなかったかのように、すぐ横を通り過ぎた。q" },
+        { text: "「──え？」" },
+        { text: "状況が飲み込めず固まってしまったが、俺はすぐさま振り返るとさっきよりも歩調が早い彼女の前に出る。" },
+        { text: "「ちょ、待ってよべーた.俺だって。美術館の。」k" },
+        { text: "彼女は再び横を通り過ぎようとしたから、俺はその道を塞ぐ。q" },
+        { text: "「･･･え、ごめん、なんか怒ってる？」z" },
+        { text: "べーたはタタラを踏んで、さっきとは反対方向に抜けようとしたから、それもまた塞ぐ。" },
+        { text: "「あの、べーた？さっきからなんで逃げ──」" },
+        { se: "se/grab.wav", text: "『ちょっと』" },
+        { text: "急に強く肩をつかまれてそちらへ振り向く。" },
+        { name: "男", text: "なんだか強ばった顔をした若い男性だ。" },
+        { text: "見れば、周りの通行人も怪訝そうな顔でこちらを見ている。" },
+        { text: "「な、なんですか今はちょっと──」" },
+        { name: "男", text: "『あなたさっきからしつこいですよ。女の子も困ってるじゃないですか。』" },
+        { text: "「え、な･･･」" },
+        { text: "肩の手から逃れようとすると、尚強く掴される。" },
+        { text: "「こ、困ってるって、こいつはさっき知り合って──」" },
+        { showChar: true, name: "？？？", text: "助けてください。z" },
+        { text: "「･･･え？」" },
+        { text: "彼女の方を振り向くと、彼女は若い男性の方に視線を向けていた。" },
+        { name: "？？？", text: "私はこんな人、知りません。n" },
+        { text: "呆然と、してしまった。q" },
+        { text: "なんでべーたは知らないふりをしている？なんで俺の話を聞いてくれない？" },
+        { name: "？？？", text: "私、もう行きますから。k" },
+        { text: "「ちょっ、まっ･･･！」" },
+        { se: "se/run.wav", text: "再び歩き出したべーたに慌てた俺は咄嗟に掴まれていない方の腕を伸ばす。q" },
+        { text: "その手はかろうじて彼女の、制服の端っこをつかんだ。" },
+        { text: "しかしその瞬間、" },
+        { se: "se/slap.wav", text: "パン！！！" },
+        { type: "flash", text: "乾いた音が響き渡る。" },
+        { text: "視界が横にぶれた。" },
+        { text: "遅れて着いてくるひりひりとした痛み、再び歩き出した彼女。" },
+        { text: "そこでようやく、自分が頬を打たれたことに気がつく。" },
+        { text: "「･･･」" },
+        { text: "「････････････」" },
+        { text: "「･･･は、･････････ははは･･･。」" },
+        { text: "喉からただ息を吐いているつもりなのに自然と笑ってしまう。" },
+        { text: "「･･･」" },
+        { text: "ふと、真横にあったカフェの窓に自分が映っているのが見えた。" },
+        { text: "そこには、傷だらけで、頬を腫らして、薄ら笑いを浮かべている俺がいた。" },
+        { text: "そこには、天野べーたを身を挺して守ったヒーローの姿は無かった。" },
+        { se: "se/muon.wav", type: "choice", options: ["１、彼女を追いかける", "２、彼女を追いかけない"] }
+    ];
+
+    const scenario_1 = [
+        { text: "「･･･待ってよ･･･」" },
+        { se: "se/run.wav", text: "「なんで無視するんだよ！！べーた！！！」" },
+        { text: "俺は再び追いつこうとする。しかし、" },
+        { name: "男", text: "『いい加減にしてください』" },
+        { se: "se/fall.wav", text: "若い男に押さえつけられて倒れ伏してしまう。" },
+        { text: "加えてそこへ、" },
+        { name: "警察官", text: "「ちょっと、君ら何してるの？」" },
+        { text: "騒ぎを聞きつけたのか、２人の警察官が隙の無い立ち方で詰め寄ってきた。" },
+        { name: "男", text: "『この男が───』" },
+        { text: "頭上で交わされる会話は頭に入ってこなくなった。" },
+        { text: "俺はべーたが去って行く後ろ姿をただひたすら見つめ続ける。" },
+        { se: "se/rain.wav",  text: "雨が、降り始めた。" },
+        { text: "なんで･･･こんなことに･･･" },
+        { type: "gameover", text: "GAME OVER。" }
+    ];
+
+    const scenario_2 = [
+        { text: "俺は再び視線をべーたの後ろ姿にやる。" },
+        { text: "今の俺にできることはこれしか無い。" },
+        { text: "そして、さっきよりも誠実に、さっきよりもはっきりと、声をあげた。" },
+        { text: "「天野、べーた･･････さん。」" },
+        { text: "「あなたがなんで俺を無視するのか、はたまた人違いなのか、俺には分かりません。」" },
+        { text: "「だから、明日もまたここで待ってます。」" },
+        { text: "彼女は一瞬だけ足を止めて、" },
+        { se: "se/run.wav", text: "そして再び歩き出した。" },
+        { bgm: "music/muon.wav", se: "se/rain.wav", text: "雨が、降り始めた。" },
+        { bg: "photo/bg_myroom_night.jpg", bgm: "music/hoka.wav", text: "＿＿" },
+        { text: "俺はただ、ぼーっと天井を眺めていた。" },
+        { text: "窓に雨粒の当たる音がぽつぽつ、と部屋中に響いている。" },
+        { text: "あれからの記憶は曖昧だ。" },
+        { text: "その後、男に事情を説明したら、分かってるんだか分かっていないんだか、そういう顔をされて終わった。" },
+        { text: "そこからべーたのことを考えながら、上の空のまま歩いていたら、自分の家に着いた。" },
+        { text: "自分の家だと思った。家の中には誰も居なかった。" },
+        { text: "明日、彼女は現れるだろうか、人違いなのか、怒っているのか、全部夢なのか。" },
+        { text: "ああだこうだと頭を巡らせていると、２２時を回った辺りで、俺は急激な眠気に襲われて、" },
+        { type: "blackout", text: "そのまま死んだように深く眠った。" },
+        { bg: "photo/bg_myroom_morning.jpg",bgm: "music/muon.wav", text: "眼が覚めたのは翌日の昼過ぎだった。" },
+        { se: "se/rustle.wav", text: "起きてすぐ顔を洗って、そのままにしていた傷を手当てして、服を着替えて、" },
+        { bg: "photo/bg_cafe_interior.jpg", bgm: "music/cafe_bgm.mp3", text: "俺はカフェに向かった。" },
+        { text: "昨日、俺が彼女と会った場所の眼と鼻の先にあるカフェ。" },
+        { se: "se/coffee.wav", text: "窓際から三番目の席に腰掛けて、コーヒーをすする。" },
+        { text: "昨日の夜に考えていたような、答えの無い問いに永遠と頭を巡らせていくうちに、" },
+        { text: "早いもので、また街が赤く染まり始めた。" },
+        { text: "帰路につく人、買い物をする人で道が賑わい始める。" },
+        { text: "次第に赤色も暗くなり、彼女は来ないんじゃないか、そういう思いが頭を支配していく。" },
+        { text: "やっぱり昨日のは夢で、彼女はただの人違いで。" },
+        { text: "そう思えばそう思うほど俺はだんだんと惨めな気持ちになってきた。" },
+        { text: "「俺は･･･」" },
+        { se: "se/chime_cafe.wav", text: "そう呟いたとき、からんからん、と扉の開く音がした。" },
+        { name: "店員", text: "『いらっしゃいませ。お席の方は･･･』" },
+        { name: "？？？", text: "あ、先に友人が来てます。" },
+        {  text: "天野べーたの声がした。" },
+        { showChar: true, name: "？？？", text: "俺がバッ、と振り返ると、彼女、べーたは少し怯えたようにこちらを伺った。k" },
+        { text: "が、意を決したように頷くとこちらへ、ツカツカと歩いてきた。f" },
+        { text: "彼女が再び姿を現したことで俺の意識はすべてそちらへ向かった。" },
+        { text: "また会えたという高揚感と、またあしらわれるのだろうかという悲壮感。" },
+        { text: "「べーた･･･」" },
+        { text: "その呼びかけは無視して、彼女は座らずに俺の横に立つ。" },
+        { text: "見上げた彼女はやはり美術館で見た彼女と全く同じ立ち姿だった。" },
+        { text: "そうしてべーたは短く息を吸うと、" },
+        { name: "？？？", text: "なんでf" },
+        { name: "？？？", text: "なんであなたは私の名字を知っているんですか？f" },
+        { text: "開口一番、そんなことを言った。" },
+        { text: "意表を突く質問に、一瞬思考が止まる。" },
+        { text: "名字？？名字って、天野？？俺そんなこと言ったっけ？" },
+        { name: "？？？", text: "まごついている俺を怪訝そうに見つめて彼女は続ける。f" },
+        { name: "？？？", text: "昨日、私が帰ろうとしているときに呼びかけましたよね？f" },
+        { name: "？？？", text: "その時あなたは、天野と口にしました。f" },
+        { name: "？？？", text: "なぜ、私の名字を知っているんですか。f" },
+        { text: "再び、質問が繰り返される。" },
+        { text: "「それは･･･その･･･」" },
+        { text: "なんと答えたら良いか分からない。" },
+        { text: "目の前にいるのは、誰なんだ？" },
+        { text: "人違いの感覚でも無い。かといってべーたがそのままそっくり本人という感覚も沸かない。" },
+        { text: "その天野べーたの顔には、温かみのある綺麗な瞳など、なかったからだ。" },
+        { text: "疑い、警戒する、凍てつくような視線。" },
+        { text: "美術館での彼女とは似ても似つかぬその視線だけが、決定的な差だった。" },
+        { showChar: true, name: "？？？", text: "どこから知ったのか分かりませんけど、新手のナンパですか？f" },
+        { text: "違う。" },
+        { name: "？？？", text: "･･･k" },
+        { name: "？？？", text: "だってどうやって知ったのか説明できないんですよね？f" },
+        { text: "そうじゃなくて。" },
+        { name: "？？？", text: "･･･f" },
+        { name: "？？？", text: "･･･はぁ。時間の無駄でした。私、帰りますね。f" },
+        { text: "待ってくれ！" },
+        { se: "se/rustle.wav", text: "きびすを返すべーた。q" },
+        { text: "何か、何か無いか。" },
+        { text: "彼女をつなぎ止めておくもの。少しだけ、話を聞いてくれる方法。" },
+        { text: "なんでも良かった、だから咄嗟に口から出たのは、なんとも滑稽な１つの提案だった。" },
+        { text: "「ルイ！！」" },
+        { text: "思ったよりも大声が出て、店内の視線が一斉に集まる" },
+        { text: "「･･･ルイボス、ティー、飲みませんか」" },
+        { text: "馬鹿らしい提案と周囲の反応に恥ずかしさを感じて、尻すぼみになってしまう。" },
+        { text: "こちらに振り向いて困惑している彼女に、付け足すp" },
+        { text: "「好きって言ってなかった、っけ･･･」q" },
+        { text: "彼女は確かそう言っていた。俺にお茶を出してくれた時。" },
+        { text: "初めて聞く名前なのに覚えていた俺の記憶を心底褒めたいと思った。" },
+        { why: "because", text: "なぜなら、" },
+        { text: "俺の言葉をゆっくりと飲み込み、やがて懐疑心と嫌悪感と少しの興味を持ったような顔になったべーたは、q" },
+        { showChar: true, name: "？？？", text: "一杯だけ。n" },
+        { se: "se/chair.wav", text: "そう呟いて、俺の隣の席に戻ってきて、腰を下ろしたからだ。" },
+        { text: "椅子は少しだけ俺と反対方向に引かれた。q" },
+        { bgm: "music/raku.wav", text: "＿＿＿" },
+        { name: "？？？", text: "それで、要件はなんですか。あと私の名字を何で知っているんですか。n" },
+        { text: "「その前に１つ確認したい。」" },
+        { name: "？？？", text: "はい？n" },
+        { text: "「あなたは、天野べーた、なのか？」" },
+        { text: "一番重要なことだ。俺は彼女の答えを待つ。" },
+        { text: "どこからどう見ても天野べーたである彼女は、どんな返答をするのか。" },
+        { name: "？？？", text: "彼女は一瞬戸惑った後、こう答えた。p" },
+        { name: "？？？", text: "いいえ。n" },
+        { text: "返答の可能性として考慮はしていたが、やはりショックだ。" },
+        { text: "俺は口元を覆って続ける。" },
+        { text: "「ごきょうだいは？お姉さんとか、妹さんとか。」" },
+        { name: "？？？", text: "いません。n" },
+        { text: "俺は大きく息を吐く。" },
+        { text: "たった今、やっと見つけた天野べーたへの手がかりが消え失せた。そうと思ったからだ。" },
+        { name: "？？？", text: "目頭に指をやって、顔をうつむかせていると彼女はイライラとした様子で口を開く。n" },
+        { name: "？？？", text: "勝手に自己完結しないでもらえますか？なんで名字を知っているのかと何回も聞いています。f" },
+        { text: "「･･･そうだな。」" },
+        { text: "俺は少し話を変えつつ彼女にことの顛末を話す。" },
+        { text: "俺はとある美術館に訪れた際に、彼女とそっくりな天野べーたに出会った。" },
+        { text: "彼女とは仲良くなったが、突然の別れが来て会えなくなってしまった、と。" },
+        { name: "？？？", text: "･･･そうなんですね。n" },
+        { text: "なんだか半信半疑な目線を向けられている。" },
+        { name: "？？？", text: "それで･･･たまたま私の旧姓とその人が一致していたと？n" },
+        { text: "「旧姓？」" },
+        { name: "？？？", text: "えぇ、天野は私の昔の名字です。家族の事情で今は名前が違います。n" },
+        { text: "「･･･へぇ、今はなんていうんだ？」" },
+        { name: "？？？", text: "俺が問うと、彼女は身を引く。f" },
+        { name: "？？？", text: "教えると思いますか？f" },
+        { text: "「それもそうか」" },
+        { se: "se/chair.wav", text: "俺は短く嘆息すると、席を立つ。" },
+        { text: "「･･･じゃあ、お茶代は俺が払うから。迷惑かけてすまなかったな。」" },
+        { showChar: true, name: "？？？", text: "･･･え、･･･え？p" },
+        { text: "彼女はなんだかびっくりしている。" },
+        { text: "「？」" },
+        { name: "？？？", text: "俺が視線で問い返すとこう答えた。p" },
+        { name: "？？？", text: "もう終わりなんですか？" },
+        { text: "「え？･･･あぁ。終わりだ」" },
+        { name: "？？？", text: "え？ホントにナンパとかじゃ無かったわけですか？" },
+        { text: "ずっとナンパだと思われていたらしい。" },
+        { text: "「違うわ。じゃあな。」" },
+        {  text: "再び別れを言い、背を向ける。q" },
+        { name: "？？？", text: "あ、ちょ･･･" },
+        { se: "se/door_close.wav", text: "なんだか声が聞こえたが、無視して会計を済ませ、外に出る。" },
+        { bg: "photo/bg_street_night.jpg", bgm: "music/muon.wav", text: "すっかり辺りは暗くなっており、人混みもまばらだ。" },
+        { text: "「･･･帰るか」" },
+        { text: "俺は帰るべき場所に帰ることにした。" },
+        { bg: "photo/bg_myroom_night.jpg", text: "＿＿＿" },
+        { se: "se/creak.wav", text: "家のどこかがきしむ音で眼が覚めた。" },
+        { text: "夜中の２時。デジタル時計はそう示している。" },
+        { text: "あれから帰ってきた俺は昨日と同じように考え事をしながら天井を見つめ、いつの間にか寝ていたらしい。" },
+        { text: "楽しい夢から覚めたとき、起きてから５分くらいの、現実を享受し始める時間のような、" },
+        { text: "物寂しい気分。それがずっと心を覆っている。" },
+        { text: "天野べーたはただの妄想だったのだろうか。" },
+        { text: "誰も居ない家。行く気の起きない学校。何も分からない自分のこと。" },
+        { text: "常に心が、宙に浮いているような感覚。" },
+        { se: "se/door.wav", text: "寝転がっていても陰鬱な気分になるだけだったので、散歩をすることにした" },
+        { bg: "photo/bg_street_night.jpg",  text: "外に出るとなんの虫か分からないが、涼しげな鳴き声がいくつか聞こえた。" },
+        {  text: "街灯の光、虫の鳴き声、つっかけたサンダルとアスファルトがこすれる音。" },
+        { text: "俺の歩く深夜２時の街はそれだけで構成されていた" },
+        { text: "しばらく頭を空っぽにして歩いていると、公園に着く。" },
+        { text: "「あれ･･･」" },
+        { text: "１つだけぽつんと置かれたベンチに人がうずくまっている。" },
+        { name: "？？？", text: "酔っ払いかな、と思って横を通り過ぎようとすると声が聞こえた。" },
+        { showChar: true, name: "？？？", text: "げ。f" },
+        { text: "そちらへ目をやると、眼を赤く腫らした、若い女性がこちらを嫌そうに見つめていた。" },
+        { text: "･･･というより" },
+        { text: "「え、べーた？」" },
+        { text: "さっき会ったばかりの彼女が、そこにいた。" },
+        { name: "？？？", text: "…私はべーたじゃないです。f" },
+        { text: "「じゃあ、なんて呼べば良いんだよ？」" },
+        { name: "？？？", text: "･･･n" },
+        { name: "？？？", text: "･･････空乃 梗（そらの きょう）。f" },
+        { name: "梗", text: "私の名前は空乃 梗です。n" },
+        { text: "「梗･･･」" },
+        { name: "梗", text: "名前呼びって･･･馴れ馴れしいですね。f" },
+        { text: "目をこすりながら彼女、梗はそう言う。" },
+        { text: "「なんでこんなところにいるんだ」" },
+        { name: "梗", text: "それはそっくりそのままお返しします。n" },
+        { name: "梗", text: "もしかして、ストーカーですか？f" },
+        { text: "「･･･えっ」" },
+        { text: "また刺すような視線を向けられて俺はうろたえる。" },
+        { name: "梗", text: "･･･f" },
+        { text: "「･･･」" },
+        { showChar: true, name: "梗", text: "･･･ぷっ、h" },
+        { name: "梗", text: "冗談ですよ。h" },
+        { text: "「･･･え」" },
+        { name: "梗", text: "あなたがなんだか悪い人では無さそうなことは分かりました。h" },
+        { text: "久しぶりに見る彼女の笑顔──ではない。" },
+        { text: "初めて見る彼女の笑顔は綺麗だった。" },
+        { text: "「･･･なにか、悩みでもあるのか」" },
+        { text: "俺は努めてなんでもなさそうに聞いてみた。彼女は泣いていたのだろうから。" },
+        { showChar: true, name: "梗", text: "･･･別に、たいそうな悩みではありません。k" },
+        { name: "梗", text: "梗も努めてなんでもなさそうにそう答えた。k" },
+        { text: "「そうか」" },
+        { name: "梗", text: "･･･z" },
+        { text: "梗は俯いてしまった。" },
+        { text: "「ま、人間誰しも悩みはあるものさ。」" },
+        { text: "沈黙を埋めるために、どうしようもないことを言う。" },
+        { text: "そんなこと言されたってどうしようもないし、悩みは消えない。" },
+        { name: "梗", text: "･･･あなたも,あるんですか？n" },
+        { text: "問われる。" },
+        { text: "俺の悩み。q" },
+        { text: "べーたに会えないこと。これからどうすればいいかわからないこと。居場所がないこと。" },
+        { text: "いろいろあるが一番解決すべき問題は、" },
+        { text: "「俺,自分が何者なのか分からないんだよ。」" },
+        { text: "「哲学的な話じゃあなくて、記憶が無いんだ,俺。」" },
+        { text: "目を覚ましてからずっと抱えてきた不安。" },
+        { text: "自分の過去に関する記憶が、一切無い。" },
+        { text: "まるで５分前に世界が作り出されたかのように。" },
+        { text: "日本語は分かる。お金の使い方も、自分の家の位置も、昇降口までの階段の下り方も。" },
+        { text: "それでも、自分の過去や、自分の名前や、自分の人間関係は分からない。" },
+        { text: "べーたに会えたらすべてが解決すると思っていた。けどそれは叶わなかった。" },
+        { name: "梗", text: "一通りしゃべり終えて、さすがに変な話だったかなと梗に視線を戻すと、彼女は驚いたように目を見開いていた。p" },
+        { text: "そうして必死に心を落ち着かせようとする様子で、彼女が次に紡いだ言葉は驚くべきものだった。" },
+        { showChar: true, name: "梗", text: "･･･私も･･････" },
+        { name: "梗", text: "私も、･･･記憶が無いんです。" },
+        { text: "「･･･え？」" },
+        { text: "意外な告白に、呆然としてしまう。" },
+        { name: "梗", text: "あなたと違って、名前や、自分の過去は情報として知っています。n" },
+        { name: "梗", text: "ですが、実際に私がそれを体験した記憶が、ないのです。p" },
+        { text: "彼女はただ、不安そうに肩を震わせていた。" },
+        { text: "「･･･それは、いつからだ？」" },
+        { name: "梗", text: "･･･昨日の夕方、･･･学校で気がついたら寝ていて、それからです。n" },
+        { text: "俺が眼を覚ました時間と大体一致する。" },
+        { text: "だとすると、この出会いは偶然じゃない。" },
+        { text: "「何か･･･あるのかな。繋がりが。」" },
+        { name: "梗", text: "･･･k" },
+        { text: "目、だからといって何か事態が好転するような案も思い浮かばない。" },
+        { text: "本当に何も思いつかない。" },
+        { text: "「･･･とりあえず、家まで送るよ。」" },
+        { text: "今更２人に接点ができたところで、記憶が無いんだから何もしようがない。" },
+        { name: "梗", text: "梗はしばらく俯いた後、k" },
+        { name: "梗", text: "うんn" },
+        { text: "そう頷いた。q" },
+        { bgm:"music/raku.wav",bg: "photo/bg_street_night.jpg", text: "＿＿" },
+        { text: "深夜の街に２人の足音が加わる。" },
+        { name: "梗", text: "そういえばあなた、ここで待ってる、なんて格好つけてたのに、普通にカフェで待ってましたよね。f" },
+        { text: "「･･･ぐ」" },
+        { name: "梗", text: "一瞬私に探す手間が発生したんですけど。f" },
+        { text: "確かにそうだ。無理を言っていたのだから、わかりやすいように待っておくのが礼儀だろう。" },
+        { text: "「･･･ごめん」" },
+        { name: "梗", text: "ま、いいですけど。h" },
+        { text: "梗は少しスキップする。" },
+        { text: "「そういえばなんで敬語なんだ？見たところ大体同じ学年だろ」" },
+        { text: "彼女は制服を着ている。対する俺も違う学校の制服を着ている。" },
+        { text: "「俺もタメ口だし、梗も崩して良いんだけど」" },
+        { name: "梗", text: "うーん、こっちの方が性に合ってるんですよねn" },
+        { text: "「そういうもんか。」" },
+        { name: "梗", text: "はい。n" },
+        { name: "梗", text: "でも、頑張って崩してみま･･･みる。h" },
+        { text: "思えば俺はべーたには最初敬語だったような。" },
+        { text: "いつからタメ口だったんだっけ。いや、というよりそもそも夢なのかなんなのか判断が、" },
+        { name: "梗", text: "また、べーたさんのことですかf" },
+        { text: "考え込んでいると彼女は前を向きながらそう問うてきた。" },
+        { text: "「あぁ、ちょっとな」" },
+        { name: "梗", text: "ふーんn" },
+        { text: "あまり興味なさそうにして梗はそっぽを向いた。" },
+        { text: "そして、" },
+        { name: "梗", text: "コンビニに、行こう。n" },
+        { text: "遠くにぽつんと光る店を指して、そう言った。q" },
+        { bg: "photo/bg_convenience_exterior.jpg", text: "＿＿" },
+        {  se: "se/rustle.wav", text: "コンビニで２人ともカップラーメンを買って外に出る。" },
+        { text: "梗は生暖かい夜風に眼を細めながら、縁石に腰を下ろした。" },
+        { text: "「･･･家、遠くないか？」" },
+        { text: "かれこれ２０分くらいは歩いている。" },
+        { name: "梗", text: "はい。n" },
+        { name: "梗", text: "だってこっち家の方向じゃないしn" },
+        { text: "梗は当たり前のように答える。" },
+        { text: "「･･･って、おい。寄り道かよ」" },
+        { text: "「早く帰らないと親御さん心配するだろ。」" },
+        { bgm:"music/muon.wav",name: "梗", text: "俺がたしなめると梗は目線を下にやった。まるで怒られた子供みたいに。k" },
+        { name: "梗", text: "心配されようがされまいが、私は何も思いません.k" },
+        { text: "コンビニの眼の覚めるような照明が、梗の背中を強烈に照らしている。" },
+        { text: "おかげで顔が真っ暗になって、何も見えない。z" },
+        { text: "「このまま家に帰らないつもりか」" },
+        { text: "梗の思うところは分かる。" },
+        { text: "自分の知らない家族に、知らない自分を知っている家族に囲まれるのはさぞ苦しかろう。" },
+        { text: "だけど、年頃の女の子が深夜徘徊なんて危ないことこの上ない。" },
+        { name: "梗", text: "･･････k" },
+        { name: "梗", text: "･･･じゃ,あなたの家に行かせてよ。n" },
+        { text: "「･･･え？」" },
+        { name: "梗", text: "私には居場所がないの。n" },
+        { text: "梗は真っ直ぐこちらを見上げている。" },
+        { text: "「でも･･･ダメだろ･･･そんな」" },
+        { text: "傷心中の出会って間もない女の子を家にあげるのはどうかと思う。" },
+        { name: "梗", text: "傷心中の出会って間もない女の子を家にあげるのはどうかと思う。とか思ってます？h" },
+        { text: "「なっ、なんでわかった！？」" },
+        { name: "梗", text: "彼女はにやりと笑って、それから短くため息をつく。" },
+        { name: "梗", text: "あなたは私に襲いかかるなんてこと、しないでしょう。多分。n" },
+        { text: "念押しの意味もあるのだろう。彼女は少し強めにそう言った。" },
+        { name: "梗", text: "･･･n" },
+        { name: "梗", text: "だから、今晩泊めてよ。n" },
+        { text: "「･･･やっぱり良くないと思う。」" },
+        { bgm: "music/hoka.wav", bg: "photo/bg_myroom.jpg", se: "se/door_close.wav", text: "＿＿＿q" },
+        { name: "梗", text: "おじゃましまーす。h" },
+        { text: "あれから３回くらい抵抗を試みたのだけred、俺も男だし強くは反対できず、こうなった。q" },
+        { text: "さっき買ったカップ麺を食べようとお湯を沸かしていると、" },
+        { text: "ね！ジャージかなんかある？" },
+        { text: "風呂場からそんな声が聞こえた。勝手にシャワーを浴びるつもりらしい。" },
+        { text: "「出しとく」" },
+        { se: "se/rustle.wav", text: "俺は短くそう答えるとタンスから学校指定のジャージを取り出した。" },
+        { text: "シャワーの音が響き始める。" },
+        { text: "に、しても、一体どうしたものか。" },
+        { text: "彼女も記憶が無いのなら、いっそのこと美術館に行ってなんらかの手がかりをつかむのもありだろうか。" },
+        { text: "というかそのくらいしかやることが無い気がする。" },
+        { text: "うとうとしながら考えていると、ガチャ、と浴室の扉の開く音がした。" },
+        { text: "びくっと飛び起きて、時計を見やると１５分くらい経っていたらしい。" },
+        { se: "se/kettle.wav", text: "ケトルがとっくに沸いているぞ、という音を発していたので急いで止めに行く。" },
+        { se: "se/ramen_open.wav", text: "カップ麺の包装ビニールをカリカリと剥がしていると、梗がリビングに戻ってきた。" },
+        { showChar: true, name: "梗", text: "シャワー借りたよ。" },
+        { text: "彼女は俺のジャージを着ていた。" },
+        { text: "かわいい女の子が俺の服を着ている、と普通はドキドキするものなのだが、" },
+        { text: "俺のジャージだという記憶が無いのでいかんせん、そんな気持ちも沸き上がらない。すまない。q" },
+        { text: "「ほらよ」" },
+        { se: "se/water_pour.wav", text: "２人分のラーメンにお湯を入れて、テレビの前の低いテーブルに置く。" },
+        { se: "se/ramen_eat.wav", text: "わーー" },
+        { text: "梗は歓声を上げてカーペットの上にぺたんと座った。" },
+        { text: "その後はなんだかしょうもない話で盛り上がった。" },
+        { text: "残っている記憶のこと、好きな飲み物のこと、記憶喪失で困ったこと、嫌いなタイプのこと。" },
+        { text: "ついこの前、強烈なビンタをして、された関係だとは思えないほどに。" },
+        { bg: "photo/bg_myroom_morning.jpg", bgm: "music/muon.wav", text: "そうして、朝日が昇った。" },
+        { text: "結局、一睡もしなかった俺たちは、妙なテンションのまま、美術館に行くことになった。" },
+        { se: "se/wash_face.wav", text: "シャワーを浴びた俺は、歯を磨いて、髪を整えて、制服に着替えた。" },
+        { text: "怪我の後はどういうわけか、きれいさっぱり無くなっていた。" },
+        { text: "梗は服がないので仕方なく昨日の制服のままだ。" },
+        { text: "いや、正確には今日か、いや、どっちでもいいや、伝われば。" },
+        {  text: "ともかく、俺たちは街に都合良くあった１つの美術館に足を運んだ。" },
+        {  text: "窓口で高校生２人分のチケットを買って、中に入る。" },
+        { text: "一歩足を踏いれて内装を見る、そこには───" },
+        { bgm: "music/hoka.wav",bg: "photo/bg_museum_exterior_day.jpg", text: "「いや、普通だな。」" },
+        { text: "別に見覚えもないし、至って普通の美術館が広がっていた。" },
+        { text: "奥にはおじいさんが１人で絵を眺めていた。" },
+        { text: "「･･･なんか思い出すか？」" },
+        { name: "梗", text: "一応梗にも問いかけるが首を振るばかり。" },
+        { name: "梗", text: "と、その時" },
+        { name: "梗", text: "あっ" },
+        { name: "梗", text: "よそ見をしていた梗が制服の端に何やら展覧会のポスターのようなものを引っかけてしまう。" },
+        { se: "se/paper.wav", text: "画鋲で貼られたポスターは３０度ほど傾いてそのまま止まった。" },
+        { name: "梗", text: "･･･ん、" },
+        { name: "梗", text: "そうして梗は、そのポスターに近寄り、指でちょいちょい、と位置を整えた。" },
+        { bgm: "music/muon.wav", text: "「っ！！！！」" },
+        { text: "強烈なデジャヴに俺は目を見開く。べーたも、指でちょいちょい、と展示品を整えていたからだ。" },
+        {  text: "すると、この状況を待ち構えていたかのように、STAFF ONLYと書かれたドアが、視界の端に写る。" },
+        { text: "俺はそちらを見やる。" },
+        { name: "梗", text: "･･･どうかした？" },
+        { text: "「いや･･･」" },
+        {  text: "俺はそう言いつつも、扉の前に歩み寄る。" },
+        { name: "梗", text: "ここ、職員さんしか入れないよ。" },
+        { text: "そんなことはわかってる。でも、この扉の向こうに何かある気がした。" },
+        { text: "だから、" },
+        { se: "se/door_rattle.wav", text: "─ガチャリ。" },
+        { text: "ドアノブを、回した。" },
+        { text: "─ガンッ" },
+        { text: "当然、鍵が開かなく、はじき返された。" },
+        { text: "「･･･」" },
+        { text: "恥ずかしかくって梗の方に振り返る。" },
+        { text: "「･･･ごめん、勘違いだった･･････」" },
+        { bgm: "music/muon.wav", text: "「･･･え？、」" },
+        { bgm: "music/genso.wav", bg: "photo/bg_museum _normal.jpg", text: "しかし眼に飛び込んできたのは予想とは全く違う景色。" },
+        { text: "まばらにいた人々はいなくなり、陰鬱としたもやが立ちこめ、雰囲気ががらりと変わっている。" },
+        { text: "何より、美術館の構造が、あの美術館と酷似、いや、完全に一致していた。" },
+        { text: "「な、なな･･･」" },
+        { name: "梗", text: "いきなり自分が求めていた結果が登場して言葉が出ずにいると、梗の声が響いた。" },
+        { showChar: true, name: "梗", text: "ちょ、えっ！何コレ！？bb" },
+        { text: "梗に視線を向けると、彼女は制服からメイド服に衣装が替わっていた。" },
+        { text: "それは記憶の中のべーたとあまりにもそっくりで。" },
+        { text: "そして間髪入れずに、q" },
+        { bgm: "music/muon.wav", se: "se/scream.wav", text: "──────ッッッッ！！！！" },
+        { text: "鼓膜が切り裂かれそうなほどの甲高い悲鳴のようなものが響き、アイツが姿を現す。" },
+        { bgm: "music/huon.wav",bg: "photo/bg_chaos.jpg", text: "「影･･･」" },
+        { text: "美術館をボロボロにして、大穴を開けた張本人。" },
+        { name: "梗（べーた？）", text: "え、え、えっ。な、なにアレぇ？！bk" },
+        { text: "梗が恐怖と意味のわからなさが混ざった表情で俺の腕に体重を預けてくる。" },
+        { text: "「あれはなんかよくわからないけど悪い奴だ。」" },
+        { text: "「アイツを倒さなくちゃ、俺たちも巻き込まれる。」" },
+        { text: "俺たちがそんな風にやりとりをしていると、ヤツがこちらへ気づく。" },
+        { text: "「っ！やばい！」" },
+        { type: "quake", se: "se/explosion.wav", text: "俺が梗を引っ張って物陰に身を寄せると同時に光線が炸裂した。q" },
+        { name: "梗", text: "ッ！！" },
+        { text: "爆音と共に元いた場所が破壊されて床の下が露出する。" },
+        { text: "穴の先は、またしても「無」。" },
+        { text: "今度穴に落ちたらどうなるか分からない。" },
+        { text: "「とにかく逃げ続けよう！」" },
+        { bgm: "music/muon.wav",se: "se/run.wav", text: "俺は梗の腕を引っ張って反対側へ向こうとする。だが、つんのめって失敗する。" },
+        { text: "彼女の腕がそれ以上動かなかったからだ。" },
+        { text: "何事だ、と振り返ると、梗は必死に右足を動かしていた。" },
+        { text: "梗の右足は、瓦礫に潰されていた。" },
+        { text: "彼女は必死に太ももを上下させているが、足を潰している岩の山はびくともしない。" },
+        { se: "se/grab.wav", text: "状況を理解した俺は梗の右足をつかんで思い切り引っ張った。" },
+        { text: "しかし、腰を落として全体重をかけても、足は抜ける様子を示さない。" },
+        { name: "梗", text: "･･･っぐ,っ･･･あっ･･･" },
+        { text: "それどころか彼女の足はなんだか変な方向に曲がっていて、顔にびっしょりと汗をかいている。" },
+        { text: "･･･まずい。" },
+        { text: "そう思った時、影が再びこちらへ構えるような姿勢を取る。" },
+        { name: "梗", text: "･･･bz" },
+        { name: "梗", text: "すると梗は自分の足を引っ張るのを止めて、息を呑んで、bz" },
+        { name: "梗", text: "ねぇ、n" },
+        { text: "「なんだよ！早く足を！！」" },
+        { name: "梗", text: "･･･多分、抜けないわ。n" },
+        { text: "あっさりとそう言う。" },
+        { text: "「なんで！！」" },
+        { name: "梗", text: "現実は、常に厳しいの。n" },
+        { name: "梗", text: "何かを得るためには何かを失わないといけない。違う？k" },
+        { text: "淡々とした梗の言葉の端々は震えている。" },
+        { text: "「そんなんやってみなくちゃわからないだろ！！」" },
+        { text: "俺は叫ぶ。" },
+        { text: "でも、俺は今まで、どうしてきただろう。q" },
+        {  text: "逃げ続けて、目を背けて、なかったことにして。" },
+        { text: "俺にしては頑張った。よくやったほうだよ。自分で限界を定めて。" },
+        { text: "そうして、１人殻に閉じこもって、１人の世界を創り上げた。" },
+        { text: "それは何年前かは分からない。" },
+        { text: "でも俺は現実を受け入れるのが怖かった。" },
+        { text: "なかったことにした。無視しておけば気負いせずに済むから。" },
+        { text: "逃げたツケはいつか回ってくるし、逃避した先はいつか崩壊する。" },
+        { text: "そうして、大事なものを失っていくんだ。" },
+        { text: "ここで逃げてしまったら、俺はもっと大事なものを失ってしまう。" },
+        { text: "「だから、俺はもう逃げない」" },
+        { bgm: "music/kando.wav",text: "俺は影から梗を守るように立ち塞がる。" },
+        { name: "梗", text: "なんで！なんで私を守るの？！bk" },
+        { name: "梗", text: "私はあなたの好きな天野べーたじゃない！bd" },
+        { name: "梗", text: "彼女の影を私に重ねているだけじゃないの？！bd" },
+        { type: "flash",  text: "違うq" },
+        { text: "「きっかけは、そうかもな。」" },
+        { text: "「でも俺は今、１人の女の子として、空乃 梗、お前を守りたいと思ったんだ」" },
+        { text: "俺は俺なりに格好つけた台詞だと思う。" },
+        { text: "でも、本心だ。" },
+        { showChar: true, name: "梗", text: "意味わかんない！bd" },
+        { name: "梗", text: "ほんとにバカ！！bf" },
+        { name: "梗", text: "私のお風呂上がりになんの反応も示さなかったくせに！！bf" },
+        { name: "梗", text: "ほんっと･･･！q" },
+        { se: "se/hug.wav", text: "鼻声になった梗は、後ろから俺の腰に腕を回してくる。q" },
+        { name: "梗", text: "･･･でも、" },
+        { name: "梗", text: "ひとりぼっちだった私を" },
+        { name: "梗", text: "･･･" },
+        { name: "梗", text: "･･･みつけてくれてありがとう" },
+        { text: "「う、うん。」" },
+        { text: "急に抱きつかれてびっくりしちゃった。" },
+        { name: "梗", text: "･･･まったく、bf" },
+        { name: "梗", text: "こんだけ格好つけたんだから、どうするか思いついたんでしょうね！！" },
+        { text: "思いついていない。" },
+        { se: "se/bite.wav", text: "ガブッ！！！q" },
+        { bgm: "music/muon.wav",text: "「痛たたたたた！！！」" },
+        { name: "梗", text: "あんたどういうツラ下げて守るとかほざいたわけ？！bd" },
+        { text: "「いやだって、テンションが･･･」" },
+        { name: "梗", text: "このままだったら２人まとめて死ぬ間抜けじゃない！！bf" },
+        { text: "「･･･で、でも、まだ猶予はありそうだし･･･」" },
+        { text: "ん？猶予？" },
+        {  text: "思えばあれだけ発射直前みたいな光を放っていた光線の音がしない。" },
+        {  text: "影がいた方向を２人して見やる。q" },
+        { bg: "photo/bg_museum_normal.jpg",text: "影は、最初から居なかったかのように、美術館を元通りにして、姿を消していた。" },
+        { bgm: "music/genso.wav", text: "＿＿＿" },
+        { text: "「まぁ、俺がもう逃げないとケツイを固めたので影は去ったと。」" },
+        { text: "とりあえず、梗の足を埋めていた瓦礫も、曲がった足も治っていたので、二人してソファに座っていた。" },
+        { text: "そして、" },
+        { showChar: true, name: "梗（べーた）", text: "はぁ･･･本当になんなのかしらね、もう。bf" },
+        { text: "完全にべーたの口調になっている梗がそこにいた。" },
+        { text: "「お前…その口調…」" },
+        { text: "メイド服も着ているし、口調は強気だし、梗だという感覚が湧かない。q" },
+        { showChar: true, name: "べーた？", text: "…うん。bn" },
+        { name: "べーた？", text: "…久しぶり…bh" },
+        { text: "なんだか目線を逸らしたまま梗はそう言う。" },
+        { text: "「べーた…なのか？」" },
+        { name: "べーた？", text: "……どっちもね。bn" },
+        { name: "べーた？", text: "私は美術館から去って、その存在意義を失った。bn" },
+        { name: "べーた？", text: "だから記憶も失ったの。bn" },
+        { text: "「空乃梗として、生まれ変わったのか。」" },
+        { text: "「…でもなんで戻ったんだ？」" },
+        { text: "また美術館に戻って来たからだろうか？" },
+        { name: "べーた？", text: "…それは…その、…bf" },
+        { text: "彼女がもごもごとしている" },
+        { name: "べーた？", text: "まあ…端的に言えば…あんたを受け入れたからよ。bb" },
+        { text: "「受け入れた？」" },
+        { name: "べーた？", text: "…えーと…その…。" },
+        { name: "べーた？", text: "あぁもううっさいわね！このバカ！！bd" },
+        { text: "理不尽n" },
+        { text: "「どういう意識なの？今。」" },
+        { name: "べーた？", text: "うーん･･･bf" },
+        { text: "天野べーたと空乃梗が混ざった状態。" },
+        { name: "べーた？", text: "なんかモヤモヤする･･･bf" },
+        { text: "「ふーん」" },
+        {  text: "美術館は、綺麗さっぱり元通りになっていた。q" },
+        { text: "ただ、目の前の一枚の絵を除いて。" },
+        { showChar: true, name: "べーた", text: "さて、これが最後の仕事よ。bn" },
+        { text: "梗？べーた？はすくりと立ち上がるとからっぽの額縁に視線を向ける.q" },
+        { showChar: true, name: "べーた", text: "べーたで結構よ。梗の記憶はちょっとした旅行に過ぎないもの。bn" },
+        { name: "べーた", text: "というか･･･あんた年頃の女の子を家に入れておいて何もナシって･･･相当のヘタレね。bf" },
+        { text: "「ほっとけ。っていうか他人事みたいに言ってるけどお前の身体だぞ」" },
+        { showChar: true, name: "べーた", text: "べーたは一瞬の後、ボッ、と顔を染める。bb" },
+        { name: "べーた", text: "い、今のナシ！bb" },
+        { se: "se/paper.wav", name: "べーた", text: "･･･ごほん。じゃあ、この欠片をここにはめて頂戴。bh" },
+        { text: "べーたがじゃらじゃらと絵画の破片を渡してくる。q" },
+        { name: "べーた", text: "あんたが忘れかけてた大事な記憶でしょ？bn" },
+        { name: "べーた", text: "向こうでなにがあっても、大切な思い出だけはきちんとしまっておくものよ。bh" },
+        { text: "「･･･そうだな。」" },
+        { bg: "photo/bg_final_puzzle.jpg", text: "俺は、ピースを持って、額縁に向き直った。" },
+        { type: "ending", text: "最後の仕事だ。" }
+    ];
+
+    let currentScenario = rawScenario;
+    let currentStep = 0;
+    let charIndex = 0;
+    let isTyping = false;
+    let typingTimer;
+    let currentFace = ''; 
+    let charVisible = false;
+    let currentBgmPath = "";
+    const bgmAudio = new Audio();
+    bgmAudio.loop = true;
+
+    // SE管理用の独立したAudio
+    let currentSeAudio = null;
+
+    const bgEl = document.getElementById('background');
+    const charEl = document.getElementById('character');
+    const nameEl = document.getElementById('name-tag');
+    const textEl = document.getElementById('text-display');
+    const choiceEl = document.getElementById('choices');
+    const container = document.getElementById('game-container');
+
+    function processFaceCommand(text) {
+        let cleanText = text;
+        let commandFound = null;
+        const keys = Object.keys(faceMap).concat(['q']).join('|');
+        const regex = new RegExp(`[\\s　]?(${keys})$`);
+        const match = cleanText.match(regex);
+        if (match) {
+            commandFound = match[1];
+            cleanText = cleanText.replace(regex, '');
+        }
+        return { cleanText, commandFound };
+    }
+
+    function performUpdate() {
+        const step = currentScenario[currentStep];
+        if (!step) return;
+
+        // ゲームオーバー時の処理
+        if (step.type === "gameover") {
+            container.onclick = null;
+            startTyping(step.text);
+            // 4秒後に最初のシナリオ（選択肢が出る前の状態）に戻す
+            setTimeout(() => { 
+                currentScenario = rawScenario;
+                currentStep = rawScenario.length - 1; // 選択肢のステップへ
+                container.onclick = handleNext;
+                performUpdate();
+            }, 4000);
+            return;
+        }
+
+        if (step.type === "ending") {
+            startTyping(step.text);
+            container.onclick = () => { window.location.href = "puzzle.html"; };
+            return;
+        }
+
+        // BGM (SEとは別系統なので重なって良い)
+        if (step.bgm && step.bgm !== currentBgmPath) {
+            currentBgmPath = step.bgm;
+            bgmAudio.pause();
+            if (step.bgm !== "music/muon.wav") {
+                bgmAudio.src = step.bgm;
+                bgmAudio.play().catch(() => {});
+            }
+        }
+
+        // SE (再生中のものを中断してから新しいのを流す)
+        if (step.se) {
+            if (currentSeAudio) {
+                currentSeAudio.pause();
+                currentSeAudio.currentTime = 0;
+            }
+            currentSeAudio = new Audio(step.se);
+            currentSeAudio.play().catch(() => {});
+        }
+        
+        if (step.bg) bgEl.style.backgroundImage = `url(${step.bg})`;
+        
+        container.classList.remove('quake', 'flash', 'black-out');
+        bgEl.classList.remove('black-out');
+        if (step.type === "quake") container.classList.add('quake');
+        if (step.type === "flash") container.classList.add('flash');
+        if (step.type === "blackout") bgEl.classList.add('black-out');
+
+        const { cleanText, commandFound } = processFaceCommand(step.text || "");
+
+        if (commandFound) {
+            if (commandFound === 'q') {
+                charVisible = false;
+            } else if (faceMap[commandFound]) {
+                currentFace = faceMap[commandFound];
+                charVisible = true;
+            }
+        }
+
+        charEl.src = currentFace;
+        charEl.style.opacity = charVisible ? "1" : "0";
+        nameEl.textContent = step.name || "";
+        nameEl.style.display = step.name ? "block" : "none";
+        
+        if (step.type === "choice") {
+            textEl.innerText = "";
+            showChoices(step);
+        } else {
+            startTyping(cleanText);
+        }
+    }
+
+    function startTyping(text) {
+        clearInterval(typingTimer);
+        charIndex = 0;
+        textEl.innerText = "";
+        isTyping = true;
+        typingTimer = setInterval(() => {
+            if (charIndex < text.length) {
+                textEl.innerText += text[charIndex++];
+            } else {
+                clearInterval(typingTimer);
+                isTyping = false;
+            }
+        }, 30);
+    }
+
+    function showChoices(step) {
+        container.onclick = null;
+        choiceEl.style.display = "flex";
+        choiceEl.innerHTML = "";
+        step.options.forEach((opt, index) => {
+            const btn = document.createElement('button');
+            btn.className = "choice-btn";
+            btn.textContent = opt;
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                choiceEl.style.display = "none";
+                playBranch(index === 0 ? scenario_1 : scenario_2);
+            };
+            choiceEl.appendChild(btn);
+        });
+    }
+
+    function playBranch(branchScenario) {
+        currentScenario = branchScenario;
+        currentStep = 0;
+        container.onclick = handleNext;
+        performUpdate();
+    }
+
+    function handleNext() {
+        if (isTyping) {
+            clearInterval(typingTimer);
+            const step = currentScenario[currentStep];
+            const { cleanText } = processFaceCommand(step.text || "");
+            textEl.innerText = cleanText;
+            isTyping = false;
+        } else {
+            currentStep++;
+            if (currentStep < currentScenario.length) {
+                performUpdate();
+            }
+        }
+    }
+
+    const startHandler = () => {
+        performUpdate();
+        container.onclick = handleNext;
+    };
+    container.onclick = startHandler;
+
+</script>
+</body>
+</html>

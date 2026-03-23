@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; background: #000; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        
+        #main-container { display: flex; align-items: center; gap: 20px; }
+        #canvas-wrapper { position: relative; }
+        canvas { background: #000; border: 1px solid #444; display: block; }
+        
+        #timer-display { position: absolute; top: -40px; left: 0; font-family: sans-serif; font-size: 24px; color: #fff; }
+        
+        #side-panel { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 300px; }
+        #beta-portrait { width: 280px; height: 280px; }
+        #beta-portrait img { width: 100%; height: 100%; object-fit: contain; }
+        #comment-display { width: 260px; background: rgba(0, 0, 0, 0.6); color: #fff; padding: 15px; border-radius: 5px; font-size: 16px; border: 1px solid #555; text-align: center; opacity: 0; transition: opacity 0.3s; }
+        #comment-display.show { opacity: 1; }
+        
+        #ui-area { margin-top: 10px; }
+        .pad-base { width: 100px; height: 100px; background: #111; border-radius: 50%; border: 2px solid #333; position: relative; }
+        .pad-stick { width: 40px; height: 40px; background: #ddd; border-radius: 50%; position: absolute; left: 30px; top: 30px; }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+    <div id="main-container">
+        <div id="canvas-wrapper">
+            <div id="timer-display"></div>
+            <canvas id="canvas" width="400" height="400"></canvas>
+        </div>
+        <div id="side-panel">
+            <div id="beta-portrait"><img id="beta-img" src="photo/beta_normal.png" alt="天野べーた"></div>
+            <div id="comment-display"></div>
+        </div>
+    </div>
+    <div id="ui-area">
+        <div class="pad-base" id="pad"><div class="pad-stick" id="stick"></div></div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
+    const stick = document.getElementById('stick'), pad = document.getElementById('pad');
+    const timerDisplay = document.getElementById('timer-display');
+    const commentDisplay = document.getElementById('comment-display');
+    const betaImg = document.getElementById('beta-img');
+    
+    const bgImg = new Image();
+    bgImg.src = "photo/bg_mu.jpg";
+
+    const bgm = new Audio("music/danmaku.wav");
+    bgm.loop = true;
+
+    const expressions = {
+        normal: "photo/beta_normal.png",
+        damage: "photo/beta_fukigen.png",
+        clear: "photo/beta_hohoemu.png",
+        gameover: "photo/beta_nothing.png"
+    };
+
+    let player = { x: 200, y: 350, vx: 0, vy: 0, hp: 8, maxHp: 8, hitRadius: 4.8 };
+    let bullets = [], move = { x: 0, y: 0 }, time = 0;
+    const LIMIT = 3000; 
+    let gameState = 'playing', currentPhase = -1;
+
+    function setExpression(exp) { betaImg.src = expressions[exp]; }
+
+    const phaseComments = {
+        0: "相手は単騎よ。",
+        1: "…ッ！ヤバいわね。",
+        2: "落ち着いて避けなさい",
+        3: "そろそろ決着の時よ。",
+        4: "ここで決めるわよ！！"
+    };
+
+    function showComment(text) {
+        commentDisplay.textContent = text;
+        commentDisplay.classList.add('show');
+    }
+
+    function resetGame() {
+        time = 0; bullets = []; player.hp = 8; player.x = 200; player.y = 350;
+        gameState = 'playing'; currentPhase = -1;
+        setExpression('normal');
+        showComment("…いくわよ");
+        bgm.currentTime = 0;
+        bgm.play().catch(() => {});
+    }
+
+    window.addEventListener('pointerdown', (e) => { 
+        if (gameState === 'gameover') {
+            resetGame(); 
+        } else if (gameState === 'playing' && bgm.paused) {
+            bgm.play().catch(() => {});
+        }
+    });
+
+    pad.addEventListener('pointermove', (e) => {
+        const rect = pad.getBoundingClientRect();
+        const dx = e.clientX - (rect.left + 50), dy = e.clientY - (rect.top + 50);
+        const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 30);
+        const angle = Math.atan2(dy, dx);
+        stick.style.left = (30 + (dist/30)*30 * Math.cos(angle)) + 'px';
+        stick.style.top = (30 + (dist/30)*30 * Math.sin(angle)) + 'px';
+        move = { x: (dist/30) * Math.cos(angle) * 0.6, y: (dist/30) * Math.sin(angle) * 0.6 };
+    });
+
+    pad.addEventListener('pointerup', () => { 
+        move = { x: 0, y: 0 }; stick.style.left = '30px'; stick.style.top = '30px'; 
+    });
+
+    function update() {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, 400, 400);
+        ctx.drawImage(bgImg, 0, 0, 400, 400);
+
+        if (gameState !== 'playing') {
+            bgm.pause();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, 400, 400);
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = "20px sans-serif";
+            ctx.fillText(gameState === 'cleared' ? "CLEAR!" : "GAME OVER...", 200, 200);
+            ctx.textAlign = 'start';
+            return requestAnimationFrame(update);
+        }
+
+        time++;
+        ctx.font = "10px sans-serif";
+        timerDisplay.textContent = "Time: " + Math.ceil(Math.max(0, (LIMIT - time))/60);
+
+        player.vx += move.x; player.vy += move.y;
+        player.vx *= 0.8; player.vy *= 0.8;
+        player.x += player.vx; player.y += player.vy;
+        player.x = Math.max(5, Math.min(395, player.x));
+        player.y = Math.max(5, Math.min(395, player.y));
+
+        const cycle = 540;
+        let phase = Math.floor(time / 540) % 5;
+        if (phase === 2 && (time % cycle) > 432) phase = 3;
+        
+        if (phase !== currentPhase) {
+            currentPhase = phase;
+            if (phaseComments[currentPhase]) showComment(phaseComments[currentPhase]);
+        }
+        
+        if (phase !== 1 && phase !== 2 && time % 40 === 0) bullets.push({x: 200, y: 50, vx: (player.x-200)/120, vy: (player.y-50)/120, r: 2});
+        if (phase === 0) { if(time % 15 === 0) for(let i=-3; i<=3; i++) bullets.push({x: 200, y: 50, vx: i*0.4, vy: 1.5, r: 2}); }
+        else if (phase === 1) { const angle = time * 0.25; for(let i=0; i<4; i++) bullets.push({x: 200, y: 50, vx: Math.cos(angle+i*Math.PI/2)*1.6, vy: Math.sin(angle+i*Math.PI/2)*1.6, r: 2}); }
+        else if (phase === 2) { if(time % 20 === 0) for(let i=0; i<36; i++) { const a = i * Math.PI / 18 + time*0.05; bullets.push({x: 200, y: 50, vx: Math.cos(a)*1.8, vy: Math.sin(a)*1.8, r: 2}); } }
+        else if (phase === 3) { if(time % 20 === 0) for(let i=0; i<12; i++) { const a = i * Math.PI / 6; bullets.push({x: 200 + Math.cos(a)*250, y: 200 + Math.sin(a)*250, vx: -Math.cos(a)*2.5, vy: -Math.sin(a)*2.5, r: 2}); } }
+        else { const a = time * 0.5; bullets.push({x: 200, y: 50, vx: Math.cos(a)*3.5 + Math.sin(time*0.1)*2.0, vy: Math.sin(a)*3.5, r: 2}); bullets.push({x: 200, y: 50, vx: Math.cos(a+Math.PI)*3.5, vy: Math.sin(a+Math.PI)*3.5, r: 2}); }
+
+        bullets.forEach((b, i) => {
+            b.x += b.vx; b.y += b.vy;
+            if(Math.hypot(player.x - b.x, player.y - b.y) < player.hitRadius + b.r) {
+                player.hp--; setExpression('damage'); setTimeout(() => {if(gameState === 'playing') setExpression('normal')}, 500);
+                bullets.splice(i, 1);
+                if(player.hp <= 0) { gameState = 'gameover'; setExpression('gameover'); showComment("……"); }
+            }
+        });
+
+        // クリア処理：LIMIT到達でmap3.htmlへ移動
+        if (time >= LIMIT) { 
+            gameState = 'cleared'; 
+            setExpression('clear'); 
+            showComment("…やるじゃない。完璧よ。"); 
+            // 2秒後に自動でmap3.htmlへ遷移
+            setTimeout(() => {
+                window.location.href = "map3.html";
+            }, 2000);
+        }
+        
+        ctx.fillStyle = '#0f0'; ctx.fillRect(20, 20, (player.hp / player.maxHp) * 100, 10);
+        ctx.fillStyle = '#0cf'; ctx.fillRect(player.x-5, player.y-5, 10, 10);
+        ctx.fillStyle = '#f00'; bullets.forEach(b => ctx.fillRect(b.x-b.r, b.y-b.r, b.r*2, b.r*2));
+        requestAnimationFrame(update);
+    }
+    update();
+</script>
+</body>
+</html>

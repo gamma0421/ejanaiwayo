@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>えーじゃないわよ - Map 3</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        #game-wrapper { width: 1280px; height: 720px; transform-origin: center center; display: flex; justify-content: center; align-items: center; }
+        #game-container { position: relative; width: 1280px; height: 720px; background: #000; cursor: pointer; overflow: hidden; }
+        #background { position: absolute; width: 100%; height: 100%; background-size: cover; background-position: center; transition: background-image 0.8s, filter 2s; }
+        #character-container { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); height: 90%; width: 100%; display: flex; justify-content: center; align-items: flex-end; pointer-events: none; }
+        #character { height: 100%; transition: opacity 0.5s, transform 1s; opacity: 0; }
+        #message-box { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 1150px; height: 200px; background: rgba(0, 0, 0, 0.85); border: 2px solid #fff; color: #fff; padding: 25px; box-sizing: border-box; font-size: 26px; line-height: 1.5; z-index: 10; }
+        #name-tag { position: absolute; top: -45px; left: 0; background: #fff; color: #000; padding: 5px 25px; font-weight: bold; font-size: 22px; display: none; }
+        #text-display { white-space: pre-wrap; }
+        
+        /* 演出用クラス */
+        .white-out { filter: brightness(5) !important; transition: filter 3s ease-in !important; }
+        .falling { animation: falling 4s infinite linear; }
+        @keyframes falling { 0% { transform: translateY(0); } 100% { transform: translateY(20px); } }
+        .shake { animation: shake 0.1s infinite; }
+        @keyframes shake { 0% { transform: translate(2px, 2px); } 50% { transform: translate(-2px, -2px); } 100% { transform: translate(2px, -2px); } }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <div id="game-container">
+        <div id="background"></div>
+        <div id="character-container">
+            <img id="character" src="">
+        </div>
+        <div id="message-box">
+            <div id="name-tag"></div>
+            <div id="text-display"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function resizeGame() {
+        const wrapper = document.getElementById('game-wrapper');
+        const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+        wrapper.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeGame);
+    resizeGame();
+
+    const faceMap = {
+        'ｎ': 'photo/beta_normal.png', 'ｈ': 'photo/beta_hohoemu.png', 'ｋ': 'photo/beta_sad.png',
+        'ｄ': 'photo/beta_angry.png', 'ｂ': 'photo/beta_hazukasi.png', 'ｚ': 'photo/beta_broken.png',
+        'ｆ': 'photo/beta_fukigen.png', 'ｐ': 'photo/beta_nothing.png', 'w': 'photo/beta_hohoemu.png' // 微笑み
+    };
+
+    const rawScenario = [
+        { bg: "photo/bg_chaos.jpg", bgm: "music/huon.wav", text: "「はぁ･･･はぁ･･･」" },
+        { text: "そろそろ逃げるのもキツくなってきた。" },
+        { text: "「ッ･･･べーたは？」" },
+        { text: "攻撃を避けながら彼女の姿を必死に探す。" },
+        { text: "グチャグチャになった瓦礫たちに目を凝らすと─" },
+        { text: "「！」" },
+        { text: "いた。" },
+        { text: "５０ｍくらい先、崩壊によって開いた大きな穴がある。" },
+        { text: "そこのフチにべーたは立っていた。q" },
+        { text: "来ていたメイド服はボロボロ。瓦礫の山を進むのに相当苦労したのだろう。" },
+        { text: "「べーた！まだか！！」" },
+        { text: "そう叫ぶと、深淵の傍でゆらゆらと立っていたべーたはこちらにゆっくりと振り返る。" },
+        { showChar: true, name: "べーた", text: "その瞳は、何かを諦めたような、泣き出しそうな、ｋ" },
+        { name: "べーた", text: "それでいて俺の無事を祈るような、綺麗な色をしていた。ｋ" },
+        { text: "「･･･べーた？？」" },
+        { text: "俺は何かとてつもなく嫌な予感がして固まってしまう。q" },
+        { name: "べーた", text: "とにかく彼女はふっと微笑み、ゆっくり口を開く。ｈ" },
+        { name: "べーた", text: "＠──────。ｈ" },
+        { bgm: "music/muon.wav", se: "se/wind.wav", text: "その言葉は轟音にかき消され、俺の耳に届くことはなかった。" },
+        { text: "同時に、べーたは床をとん、と軽く蹴った。" },
+        { text: "それは人間が身を投げて、そして落ちて行くには十分だった。q" },
+        { text: "べーたの身体が穴に吸い込まれるようにして傾く。" },
+        { text: "「べーた！！」" },
+        { text: "間に合わない。たった５０メートルが途方も無いに距離に思えた。" },
+        { text: "彼女は自ら身を投げたのだ。俺はそんな現実に、反射的に目をつぶりそうになる。" },
+        { text: "だがその時、化け物の影が揺らいだ。" },
+        { text: "『走りなよ』『バカ。』" },
+        { text: "脳内に響いたのは、影の声か、それとも俺自身の叫びか。" },
+        { text: "そうだ、俺はこの場所を守るよりも彼女と居たいんだ。" },
+        {  type: "falling", text: "俺は降り注ぐ弾幕の真っ只中へ、自ら飛び込んだ。" },
+        { text: "瓦礫に足を持っていかれても、光線がすぐ傍を通過しようとも、" },
+        { text: "身体が痛んでも、５０メートル離れていても、全部全部なかったことにして。" },
+        { bg: "photo/bg_mu.jpg",text: "恐怖も何もかも置いてきた俺は大穴に飛び込んで、空中に放り出されたべーたの腕をつかむ。" },
+        { se: "se/grab.wav", text: "直後急速に襲ってくる浮遊感。「無」へ飛び込んだ俺たち２人は重なり合うようにして落ちていく。" },
+        { showChar: true, name: "べーた", text: "あんた何してんのよ！！！" },
+        { name: "べーた", text: "べーたは訳が分からないと言った表情で叫ぶ。俺の腕を引き剥がそうとする。" },
+        { text: "「お前だ！！！！」" },
+        { text: "同じく叫ぶ。彼女の肩を強くつかむ。" },
+        { text: "「なんでこんなことしたんだよ！！」" },
+        { name: "べーた", text: "私が！" }, 
+        { bgm: "music/kando.wav",name: "べーた", text: "私が居なくなれば崩壊も！！あんたがここに固執することもなくなるの！！" },
+        { text: "「それでお前はいいのかよ！！」" },
+        { name: "べーた", text: "よくないわよ！！死ぬのは怖いし、あんたが私を忘れるのも、嫌よ！！" },
+        { text: "「なら、なんで！！！」" },
+        { name: "べーた", text: "私は！精神が生み出した情報に過ぎないからよ！！！" },
+        { name: "べーた", text: "でもあんたは違う！！あんた、ここで死んだら本当に死ぬのよ！？わかってるの？！" },
+        { text: "べーたの悲痛な叫びが虚空に吸い込まれていく。" },
+        { text: "やがて風を切る音のみがこの場を支配する。" },
+        { text: "２人の髪の毛が風にこねくり回されて、１つになる。q" },
+        { name: "べーた", text: "「･･･」" },
+        { name: "べーた", text: "･･････バカね。本当にバカ。" },
+        { name: "べーた", text: "私と一緒に落ちてどうするのよ。あんたは向こうで幸せにならなくちゃいけないのに。" },
+        { text: "彼女が俺の胸に顔を埋める。q" },
+        { text: "暖かい吐息がシャツを通して伝わってくる。" },
+        { name: "べーた", text: "あんたがそうやって思わせぶりな態度をするのが悪いんだわ。" },
+        { text: "「別に思わせぶりなんかじゃ──」" },
+        { type: "white", text: "言いかけたとき、視界の端が白くはじけ始めた。" },
+        { name: "べーた", text: "･･･あんたがいると、この退屈な美術館も悪くなかったわ。" },
+        { name: "べーた", text: "バカでヘタレなあんたの隣にいるのが･･････" },
+        { text: "視界の大部分が真っ白になっていき、目の前の彼女も見えなくなってくる。" },
+        { text: "身体に当たる強風も、浮遊感も次第に薄れていく。" },
+        { text: "「べーた･･･？行かないでくれ･･･！」" },
+        { name: "べーた", text: "ふふ･･･私があんたをずっと見てきたこと･･･それだけは忘れないでいてね。" },
+        { se: "se/light.wav", text: "「べーた！！！！」" },
+        { text: "そう叫ぶと周りが強い光につつまれる。" },
+        { text: "またしても、俺は反射的に目をつぶってしまった。" }
+    ];
+
+    let currentStep = 0;
+    let charIndex = 0;
+    let isTyping = false;
+    let typingTimer;
+    let currentFace = ''; 
+    let charVisible = false;
+    let currentBgmPath = "";
+    const bgmAudio = new Audio();
+    bgmAudio.loop = true;
+
+    const bgEl = document.getElementById('background');
+    const charEl = document.getElementById('character');
+    const nameEl = document.getElementById('name-tag');
+    const textEl = document.getElementById('text-display');
+    const container = document.getElementById('game-container');
+
+    function update() {
+        const step = rawScenario[currentStep];
+        if (!step) {
+            // シナリオ終了時にmap4.htmlへ遷移
+            window.location.href = "map4.html";
+            return;
+        }
+
+        if (step.bgm && step.bgm !== currentBgmPath) {
+            currentBgmPath = step.bgm;
+            bgmAudio.pause();
+            if (step.bgm !== "music/muon.wav") {
+                bgmAudio.src = step.bgm;
+                bgmAudio.play().catch(() => {});
+            }
+        }
+
+        if (step.se) new Audio(step.se).play().catch(() => {});
+        if (step.bg) bgEl.style.backgroundImage = `url(${step.bg})`;
+        
+        let rawText = step.text || "";
+        const lastChar = rawText.slice(-1);
+        if (faceMap[lastChar]) {
+            currentFace = faceMap[lastChar];
+            rawText = rawText.slice(0, -1);
+            charVisible = true;
+        } else if (lastChar === 'ｑ' || lastChar === 'q') {
+            charVisible = false;
+            rawText = rawText.slice(0, -1);
+        }
+
+        charEl.src = currentFace;
+        charEl.style.opacity = charVisible ? "1" : "0";
+        nameEl.textContent = step.name || "";
+        nameEl.style.display = step.name ? "block" : "none";
+        
+        // 演出
+        if (step.type === "falling") container.classList.add('falling');
+        if (step.type === "white") bgEl.classList.add('white-out');
+
+        startTyping(rawText);
+    }
+
+    function startTyping(text) {
+        clearInterval(typingTimer);
+        charIndex = 0;
+        textEl.innerText = "";
+        isTyping = true;
+        typingTimer = setInterval(() => {
+            if (charIndex < text.length) {
+                textEl.innerText += text[charIndex++];
+            } else {
+                clearInterval(typingTimer);
+                isTyping = false;
+            }
+        }, 40);
+    }
+
+    container.onclick = () => {
+        if (isTyping) {
+            clearInterval(typingTimer);
+            isTyping = false;
+            let t = rawScenario[currentStep].text;
+            if (faceMap[t.slice(-1)] || t.slice(-1) === 'q' || t.slice(-1) === 'ｑ') t = t.slice(0,-1);
+            textEl.innerText = t;
+        } else {
+            currentStep++;
+            update();
+        }
+    };
+
+    update();
+</script>
+</body>
+</html>

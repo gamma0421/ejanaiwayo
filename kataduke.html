@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>おかたづけ - Stage 1: 片付け</title>
+    <style>
+        body { margin: 0; background: #000; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
+        #game-wrapper { width: 800px; height: 600px; transform-origin: center center; display: flex; justify-content: center; align-items: center; }
+        
+        #game-area { 
+            position: relative; width: 800px; height: 600px; border: 1px solid #444; overflow: hidden; 
+            background-image: url('kata/katabg.png');
+            background-size: cover;
+            background-position: center;
+        }
+        
+        #grid-right { 
+            display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); 
+            gap: 10px; width: 240px; height: 320px; position: absolute; right: 50px; top: 100px; z-index: 10;
+            padding: 10px; box-sizing: border-box;
+        }
+
+        .item { width: 70px; height: 70px; cursor: pointer; display: flex; align-items: center; justify-content: center; background-size: contain; background-repeat: no-repeat; background-position: center; }
+        .empty { cursor: default; }
+
+        .note { 
+            position: absolute; left: 10px; width: 60px; height: 20px; z-index: 10;
+            background-image: url('kata/notu.png');
+            background-size: contain; background-repeat: no-repeat;
+        }
+
+        @keyframes gentle-shake { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-3px, -3px); } 75% { transform: translate(3px, 3px); } }
+        .shake-body { animation: gentle-shake 0.1s 3; }
+
+        @keyframes flash-blue-soft { 0% { background: rgba(0, 100, 255, 0.2); } 100% { background: transparent; } }
+        .flash-blue { animation: flash-blue-soft 0.5s; pointer-events: none; position: absolute; top:0; left:0; width:100%; height:100%; z-index: 90; }
+
+        .sparkle { position: absolute; width: 10px; height: 10px; background: white; border-radius: 50%; pointer-events: none; z-index: 95; }
+        @keyframes sparkle-anim { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
+
+        #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 200; display: flex; justify-content: center; align-items: center; }
+        #start-btn { padding: 20px 40px; font-size: 32px; background: #fff; color: #000; border: none; cursor: pointer; font-weight: bold; }
+
+        #pause-menu { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 50; display: none; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
+        .pause-btn { width: 200px; padding: 20px; font-size: 24px; cursor: pointer; font-weight: bold; }
+        #pause-trigger { position: absolute; bottom: 30px; right: 30px; width: 100px; height: 100px; font-size: 30px; background: #444; color: #fff; border: 3px solid #fff; border-radius: 50%; cursor: pointer; z-index: 40; }
+        
+        #rhythm-bar { width: 80px; height: 500px; background: rgba(0,0,0,0.3); position: absolute; left: 300px; top: 50px; border: 2px solid #333; z-index: 5; }
+        #judge-line { position: absolute; bottom: 15%; width: 80px; height: 6px; background: #f00; z-index: 100; pointer-events: none; }
+        
+        #beta { position: absolute; bottom: 0; left: 0; height: 400px; z-index: 1; transition: 0.2s; }
+        #comment { position: absolute; bottom: 20px; left: 150px; width: 300px; background: #000; padding: 10px; border: 1px solid #777; z-index: 20; }
+        #status { position: absolute; top: 20px; right: 20px; font-size: 1.5rem; color: #ffcc00; z-index: 20; }
+        #message { position: absolute; top: 40%; left: 40%; font-size: 3rem; font-weight: bold; z-index: 100; pointer-events: none; text-shadow: 0 0 10px #000; }
+    </style>
+</head>
+<body>
+    <div id="game-wrapper">
+        <div id="game-area">
+            <div id="start-overlay">
+                <button id="start-btn" onclick="startGame()">片付けを開始する</button>
+            </div>
+            <div id="status">ミス残り: <span id="lives">12</span></div>
+            <div id="message"></div>
+            <div id="flash-overlay" class="flash-blue" style="display:none;"></div>
+            <button id="pause-trigger" onclick="togglePause()">II</button>
+            <div id="pause-menu">
+                <button class="pause-btn" onclick="togglePause()">再開</button>
+                <button class="pause-btn" onclick="retryGame()">リトライ</button>
+            </div>
+            <img id="beta" src="photo/beta_normal.png" alt="べーた">
+            <div id="comment">全部片付けなさい！</div>
+            <div id="rhythm-bar"><div id="judge-line"></div></div>
+            <div id="grid-right"></div>
+        </div>
+    </div>
+    <script>
+        const answerOrder = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'];
+        const comments = { 
+            perfect: ["完璧よ。弟子に欲しいわ。", "最高よ！！", "さすがあんたね。"], 
+            nice: ["まあまあね。", "もっといけるわ。", "ふうん。"], 
+            bad: ["痛っ！", "ばか！", "わっ！"] 
+        };
+        const MAX_LIVES = 12;
+        let currentStep = 0, lives = MAX_LIVES, activeNotes = [], gameActive = false, isPaused = false;
+        let isFirstNote = true;
+
+        const bgm = new Audio('music/kataduke.wav');
+        bgm.loop = false;
+        bgm.preload = 'auto';
+
+        function resizeGame() {
+            const wrapper = document.getElementById('game-wrapper');
+            const scale = Math.min(window.innerWidth / 800, window.innerHeight / 600);
+            wrapper.style.transform = `scale(${scale})`;
+        }
+        window.addEventListener('resize', resizeGame);
+        resizeGame();
+
+        function startGame() {
+            document.getElementById('start-overlay').style.display = 'none';
+            gameActive = true;
+            renderGrids();
+            spawnNote();
+        }
+
+        function togglePause() { 
+            if(!gameActive) return;
+            isPaused = !isPaused; 
+            document.getElementById('pause-menu').style.display = isPaused ? 'flex' : 'none'; 
+            if(isPaused) bgm.pause();
+            else if(gameActive && !isFirstNote) bgm.play();
+        }
+
+        function retryGame() {
+            bgm.pause();
+            bgm.currentTime = 0;
+            location.reload();
+        }
+
+        function createSparkles(x, y) {
+            for(let i=0; i<5; i++) {
+                const s = document.createElement('div');
+                s.className = 'sparkle';
+                s.style.left = (x + (Math.random()*40-20)) + 'px';
+                s.style.top = (y + (Math.random()*40-20)) + 'px';
+                s.style.animation = 'sparkle-anim 0.5s forwards';
+                document.getElementById('game-area').appendChild(s);
+                setTimeout(() => s.remove(), 500);
+            }
+        }
+
+        function showMessage(text, color, isPerfect = false, isBad = false) {
+            const msg = document.getElementById('message');
+            const beta = document.getElementById('beta');
+            const overlay = document.getElementById('flash-overlay');
+            msg.innerText = text; msg.style.color = color;
+            
+            if(isPerfect) {
+                beta.src = 'photo/beta_hohoemu.png';
+                overlay.style.display = 'block';
+                setTimeout(() => { beta.src = 'photo/beta_normal.png'; overlay.style.display = 'none'; }, 500);
+                createSparkles(340, 480);
+                document.getElementById('comment').innerText = comments.perfect[Math.floor(Math.random()*3)];
+            } else if(isBad) {
+                document.getElementById('game-area').classList.add('shake-body');
+                setTimeout(() => document.getElementById('game-area').classList.remove('shake-body'), 300);
+                document.getElementById('comment').innerText = comments.bad[Math.floor(Math.random()*3)];
+            } else {
+                document.getElementById('comment').innerText = comments.nice[Math.floor(Math.random()*3)];
+            }
+            setTimeout(() => msg.innerText = '', 400);
+        }
+
+        function triggerFail() {
+            if(!gameActive || isPaused) return;
+            lives--;
+            document.getElementById('lives').innerText = lives;
+            document.getElementById('beta').src = 'photo/beta_fukigen.png';
+            showMessage("MISS", "#f00", false, true);
+            setTimeout(() => document.getElementById('beta').src = 'photo/beta_normal.png', 600);
+            if (lives <= 0) { 
+                gameActive = false; 
+                bgm.pause();
+                alert("ゲームオーバー"); 
+                retryGame(); 
+            }
+        }
+
+        function spawnNote() {
+            if(!gameActive || currentStep >= answerOrder.length) return;
+            if(isPaused) { setTimeout(spawnNote, 100); return; }
+
+            if(isFirstNote) {
+                bgm.play().catch(e => console.error("Audio failed:", e));
+                isFirstNote = false;
+            }
+
+            const note = document.createElement('div');
+            note.className = 'note';
+            note.style.top = '0px';
+            document.getElementById('rhythm-bar').appendChild(note);
+            activeNotes.push(note);
+            const animate = () => {
+                if(!gameActive) return;
+                if(isPaused) { requestAnimationFrame(animate); return; }
+                let pos = parseFloat(note.style.top);
+                pos += 3;
+                note.style.top = pos + 'px';
+                if (pos > 480) { 
+                    if(activeNotes.includes(note)) { 
+                        activeNotes.shift(); 
+                        note.remove(); 
+                        triggerFail(); 
+                    }
+                } else { requestAnimationFrame(animate); }
+            };
+            requestAnimationFrame(animate);
+            setTimeout(spawnNote, 1500);
+        }
+
+        function renderGrids() {
+            const container = document.getElementById('grid-right');
+            container.innerHTML = '';
+
+            // --- クリア判定ロジック ---
+            if(currentStep >= answerOrder.length) { 
+                gameActive = false;
+                bgm.pause();
+                
+                if(lives >= MAX_LIVES) {
+                    alert("完璧な片付けね！次のステージへ行くわよ。"); 
+                    window.location.href = "map2.html";
+                } else {
+                    alert("片付けは終わったけど、ミスが多すぎるわ。もう一度最初からやり直しなさい！");
+                    retryGame();
+                }
+                return; 
+            }
+
+            let remaining = answerOrder.slice(currentStep);
+            let display = [...remaining, ...Array(12 - remaining.length).fill(null)].sort(() => Math.random() - 0.5);
+            display.forEach(imgName => {
+                const div = document.createElement('div');
+                if (imgName === null) div.className = 'item empty';
+                else {
+                    div.className = 'item';
+                    div.style.backgroundImage = `url('kata/${imgName}.png')`;
+                    div.onclick = () => {
+                        if(!gameActive || isPaused) return;
+                        const note = activeNotes[0];
+                        if (!note) return;
+                        const noteY = parseFloat(note.style.top);
+                        if (imgName === answerOrder[currentStep] && Math.abs(noteY - 425) < 100) {
+                            activeNotes.shift();
+                            note.remove();
+                            showMessage("PERFECT", "#0cf", true, false);
+                            currentStep++;
+                            renderGrids();
+                        } else {
+                            if(activeNotes.length > 0) {
+                                activeNotes.shift();
+                                note.remove();
+                            }
+                            triggerFail();
+                        }
+                    };
+                }
+                container.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>

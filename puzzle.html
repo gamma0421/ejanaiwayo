@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>記憶の修復 - 修正テスト版</title>
+    <style>
+        body { margin: 0; background: #0c0c0c; color: white; display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
+        #puzzle-area { position: relative; width: 800px; height: 600px; border: 1px solid #333; background: #111; }
+        
+        #target-container { 
+            position: absolute; 
+            width: 500px; 
+            height: 300px; 
+            top: 150px; 
+            left: 150px; 
+            border: 2px dashed #555; 
+            background: rgba(255,255,255,0.02); 
+            z-index: 1;
+        }
+
+        .piece { 
+            position: absolute; 
+            width: 100px; 
+            height: 100px; 
+            cursor: grab; 
+            background-color: #333;
+            background-size: 500px 300px; 
+            border: 1px solid rgba(255,255,255,0.2);
+            z-index: 10;
+            box-sizing: border-box;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+        }
+        .piece.dragging { cursor: grabbing; z-index: 1000 !important; border-color: #0cf; box-shadow: 5px 5px 20px rgba(0,0,0,0.8); }
+        
+        .target-slot { 
+            position: absolute; 
+            width: 100px; 
+            height: 100px; 
+            border: 1px solid rgba(255,255,255,0.05); 
+            pointer-events: none; 
+        }
+
+        #message { margin-top: 20px; font-size: 1.5rem; color: #0cf; min-height: 1.5em; }
+    </style>
+</head>
+<body>
+
+    <div id="message">破片を枠の中に運びなさい。</div>
+
+    <div id="puzzle-area">
+        <div id="target-container"></div>
+    </div>
+
+    <button style="margin-top:10px; padding:10px 20px; cursor: pointer;" onclick="location.reload()">リセット</button>
+
+<script>
+    const ROWS = 3, COLS = 5, PIECE_SIZE = 100, OFFSET_X = 150, OFFSET_Y = 150, SNAP_DIST = 40;
+    let completedPieces = 0;
+    const totalPieces = ROWS * COLS;
+
+    function initPuzzle() {
+        const area = document.getElementById('puzzle-area');
+        const container = document.getElementById('target-container');
+
+        for (let i = 0; i < totalPieces; i++) {
+            const r = Math.floor(i / COLS), c = i % COLS;
+            const targetX = c * PIECE_SIZE, targetY = r * PIECE_SIZE;
+
+            const slot = document.createElement('div');
+            slot.className = 'target-slot';
+            slot.style.left = targetX + 'px';
+            slot.style.top = targetY + 'px';
+            container.appendChild(slot);
+
+            const piece = document.createElement('div');
+            piece.className = 'piece';
+            piece.style.backgroundImage = "url('photo/complete_image.jpg')"; 
+            piece.style.backgroundPosition = `-${targetX}px -${targetY}px`;
+            
+            // 枠の外（左右の空きスペース）にバラけさせる
+            const startX = Math.random() < 0.5 ? Math.random() * 100 : 650 + Math.random() * 50;
+            const startY = Math.random() * 500;
+            piece.style.left = startX + 'px';
+            piece.style.top = startY + 'px';
+
+            setupDraggable(piece, targetX + OFFSET_X, targetY + OFFSET_Y);
+            area.appendChild(piece);
+        }
+    }
+
+    function setupDraggable(el, destX, destY) {
+        let isDragging = false;
+        let startX, startY;
+
+        const onPointerDown = (e) => {
+            if (el.dataset.fixed === "true") return;
+            isDragging = true;
+            el.classList.add('dragging');
+            
+            // ページ全体の座標から要素の左上座標を引いて、クリック位置を保持
+            const rect = el.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+            
+            // イベントをキャプチャ
+            el.setPointerCapture(e.pointerId);
+        };
+
+        const onPointerMove = (e) => {
+            if (!isDragging) return;
+            
+            // 親要素（#puzzle-area）の相対座標を計算
+            const areaRect = document.getElementById('puzzle-area').getBoundingClientRect();
+            let newX = e.clientX - areaRect.left - startX;
+            let newY = e.clientY - areaRect.top - startY;
+            
+            el.style.left = newX + 'px';
+            el.style.top = newY + 'px';
+        };
+
+        const onPointerUp = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            el.classList.remove('dragging');
+            el.releasePointerCapture(e.pointerId);
+
+            const curX = parseInt(el.style.left);
+            const curY = parseInt(el.style.top);
+
+            // 正解判定（指定の座標に近ければ吸着）
+            if (Math.abs(curX - destX) < SNAP_DIST && Math.abs(curY - destY) < SNAP_DIST) {
+                el.style.left = destX + 'px';
+                el.style.top = destY + 'px';
+                el.style.border = "none";
+                el.style.boxShadow = "none";
+                el.style.cursor = "default";
+                el.dataset.fixed = "true";
+                completedPieces++;
+                if (completedPieces === totalPieces) {
+                    document.getElementById('message').innerText = "……全部つながったわ。あんたにしては上出来ね。";
+                }
+            }
+        };
+
+        el.addEventListener('pointerdown', onPointerDown);
+        el.addEventListener('pointermove', onPointerMove);
+        el.addEventListener('pointerup', onPointerUp);
+    }
+
+    initPuzzle();
+</script>
+</body>
+</html>

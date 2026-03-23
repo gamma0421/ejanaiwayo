@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>えーじゃないわよ - Map 2</title>
+    <style>
+        body { 
+            margin: 0; 
+            background: #000; 
+            overflow: hidden; 
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #game-wrapper {
+            width: 1280px;
+            height: 720px;
+            transform-origin: center center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #game-container { 
+            position: relative; 
+            width: 1280px; 
+            height: 720px; 
+            background: #000; 
+            cursor: pointer; 
+            flex-shrink: 0;
+        }
+
+        #background { position: absolute; width: 100%; height: 100%; background-size: cover; background-position: center; transition: background-image 0.8s; opacity: 1; }
+        #character-container { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); height: 90%; width: 100%; display: flex; justify-content: center; align-items: flex-end; pointer-events: none; }
+        #character { height: 100%; transition: opacity 0.3s; opacity: 0; }
+        #message-box { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 1150px; height: 200px; background: rgba(0, 0, 0, 0.85); border: 2px solid #fff; color: #fff; padding: 25px; box-sizing: border-box; font-size: 26px; line-height: 1.5; z-index: 10; }
+        #name-tag { position: absolute; top: -45px; left: 0; background: #fff; color: #000; padding: 5px 25px; font-weight: bold; font-size: 22px; display: none; }
+        #choices { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); display: none; flex-direction: column; gap: 15px; z-index: 20; }
+        .choice-btn { width: 450px; padding: 15px; background: #fff; border: 2px solid #000; cursor: pointer; font-size: 20px; font-weight: bold; text-align: center; }
+        .choice-btn:hover { background: #ff0000; color: #fff; }
+        
+        .quake { animation: quake 0.1s infinite; }
+        @keyframes quake { 0% { transform: translate(0,0); } 25% { transform: translate(-8px,8px); } 50% { transform: translate(8px,-8px); } 75% { transform: translate(-8px,-8px); } 100% { transform: translate(8px,8px); } }
+        .flash { animation: flash 0.2s ease-out; }
+        @keyframes flash { from { background: #fff; } to { background: transparent; } }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <div id="game-container">
+        <div id="background"></div>
+        <div id="character-container">
+            <img id="character" src="">
+        </div>
+        <div id="message-box">
+            <div id="name-tag"></div>
+            <div id="text-display"></div>
+        </div>
+        <div id="choices"></div>
+    </div>
+</div>
+
+<script>
+    function resizeGame() {
+        const wrapper = document.getElementById('game-wrapper');
+        const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+        wrapper.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resizeGame);
+    resizeGame();
+
+    const faceMap = {
+        'ｎ': 'photo/beta_normal.png', 'ｈ': 'photo/beta_hohoemu.png', 'ｋ': 'photo/beta_sad.png',
+        'ｄ': 'photo/beta_angry.png', 'ｂ': 'photo/beta_hazukasi.png', 'ｚ': 'photo/beta_broken.png',
+        'ｆ': 'photo/beta_fukigen.png', 'ｐ': 'photo/beta_nothing.png',
+        'n': 'photo/beta_normal.png', 'h': 'photo/beta_hohoemu.png', 'k': 'photo/beta_sad.png',
+        'd': 'photo/beta_angry.png', 'b': 'photo/beta_hazukasi.png', 'z': 'photo/beta_broken.png',
+        'f': 'photo/beta_fukigen.png', 'q': 'photo/beta_nothing.png'
+    };
+
+    const rawScenario = [
+        { bg: "photo/bg_warehouse.jpg", bgm: "music/genso.wav", text: "「はぁ･･･はぁ･･･」" },
+        { showChar: true, name: "べーた", text: "お疲れ様。ｎ" },
+        { name: "べーた", text: "死に物狂いだったわね。ｈ" },
+        { text: "「ほんとにな･･･」" },
+        { text: "汗を拭いながらそう答える。" },
+        { text: "死ぬかと思った。何度死んだことか。" },
+        { name: "べーた", text: "･･･あんたが来るまで、私はずっとひとりぼっちでやってたのよ。q" },
+        { text: "べーたが窓の方を見ながら、ぽつりと呟く。ｑ" },
+        { text: "その横顔には、見ているこっちまで泣きそうになるほどの強い哀しさがあった。" },
+        { text: "彼女は管理人としての責務を全うしていたのだろう、暗闇の中に、ただひとりぼっちで。" },
+        { text: "「･･･」" },
+        { text: "俺が押し黙っていると、べーたがこちらにやってきて顔を拭ってくれる。n" },
+        { text: "彼女の細いながらも温かい手が俺の頬を包む。" },
+        { name: "べーた", text: "お茶、飲む？ｈ" },
+        { text: "「え？あぁ。」" },
+        { text: "俺が頷くと彼女は右手を空中にひょい、と挙げた。" },
+        { se: "se/paf.wav", text: "すると気の抜けたような音と共にお茶の入ったティーカップが現れる。q" },
+        { name: "べーた", text: "どうぞ？h" },
+        { text: "一部始終を見て愕然としていたが、カップをずい、と差し出され、おとなしく口をつける。" },
+        { text: "暖かく、鼻に抜けるような独特の香り。" },
+        { text: "「･･･美味しい」" },
+        { name: "べーた", text: "でしょう？？私のお気に入りなの。ルイボスティーよ。ｈ" },
+        { text: "「ルイ･･･？」" },
+        { text: "温かい飲み物が身体を癒やし、頭が回るようになってきた。" },
+        { text: "俺はべーたのほうに向き直る。" },
+        { text: "「･･･で、これでやることは終わりか？？」" },
+        { name: "べーた", text: "そうね。お疲れ様。ｎ" },
+        { text: "意外にももう終わりらしい。" },
+        { text: "これでやっと帰れるのか･･････" },
+        { text: "･･････" },
+        { text: "･･･いや、帰る場所が無いんだ。" },
+        { text: "だって俺は情報なんだから。" },
+        { text: "自分の不安定さを自覚し、再び不安になる。" },
+        { text: "「俺は･･･俺は、これからどうすればいい？」" },
+        { text: "居場所がない俺に居場所はあるのだろうか。" },
+        { name: "べーた", text: "･･･あんたがどうしたいかを自分で考えなさい。k" },
+        { text: "目の前のべーたが真っ直ぐにこちらを見据える。n" },
+        { text: "俺がやりたいこと･･･" },
+        { text: "帰る場所の無い俺にとっては、やりたいことなんて見つからなかった。" },
+        { text: "だから、ここにいるしかないのだろうか。" },
+        { text: "ここでこうして、べーたと騒ぎながら、暮らしていくのだろうか。" },
+        { text: "俺にはそれが悪い選択肢だとは思えなかった。" },
+        { text: "いや、そうじゃない。" },
+        { text: "俺はここでべーたと新しい時間を紡いでいきたい、と心から思った。" },
+        { text: "彼女と居ると安心感に包まれるし、感情が豊かな彼女は非常に魅力的に見えた。" },
+        { text: "なにより、ここに彼女をひとりぼっちで、放っておく訳にはいかなかった。" },
+        { text: "だから、" },
+        { text: "べーたの手を優しくとる。" },
+        { text: "「俺は･･･ここで、お前と･･･」" },
+        { bgm: "music/muon.wav", type: "quake", se: "se/quake.wav",text: "グラグラグラッ！！！！！！！！！！" },
+        { text: "「っ！！」ｑ" },
+        { text: "またか！！！" },
+        { text: "さっきよりは弱いが、それでも十分に大きい揺れ。" },
+        { text: "まともに立つことができずに地面にへたりこんでしまう。" },
+        { se: "se/break.wav",text: "遠くでパリーンと何かが割れる音がした。" },
+        { text: "ゴゴゴゴ･･････" },
+        { text: "揺れが収まる。" },
+        { text: "周囲の安全を確認して顔を上げると、傍にはべーたがいた。z" },
+        { text: "べーたは立ち尽して一点を見つめているようだった。" },
+        { text: "「べーた、怪我はない───」" },
+        { text: "顔をのぞき込み、問いかけようとするも言葉が喉につっかえた。" },
+        { text: "彼女がこの世の終わりかのような顔つきをしていたからだ。" },
+        { text: "「べ、べーた･･･」" },
+        { text: "問いかけるも返事が無い。" },
+        { text: "ただ何かを見つめている。その視線の先には、" },
+        { name: "べーた", text: "絵･･･がｋ" },
+        { bg: "photo/bg_broken_art.jpg", text: "ようやくぽつりと呟いた彼女はその視線の先、粉々になった絵画に駆け寄った。俺がここに来て初めて目にしたあの絵だ。ｑ" },
+        { text: "足をもつれさせながら散乱した破片に飛び込み、必死に欠片を集め始める。" },
+        { text: "「お、おい！怪我するぞ！！」" },
+        { text: "俺は後を追って呼びかける。" },
+        { text: "しかしべーたは聞く耳を持たない。散らばったものをかき集め、かき集め、自分の腕の中で抱きしめる。" },
+        { text: "「･･･」" },
+        { name: "べーた", text: "･･･" },
+        { text: "カチャカチャという音が静寂の中に響くのみ。" },
+        { text: "やがて、" },
+        { name: "べーた", text: "あ･･･、ｋ" },
+        { text: "無常にも破片はゆっくりと砂に変化していき、床へ。" },
+        { text: "そしてその砂も絨毯に染みこむようにして消えてしまった。" },
+        { name: "べーた", text: "･･･" },
+        { text: "「･･･」" },
+        { name: "べーた", text: "･･･あんた。ｚ" },
+        { name: "べーた", text: "あんたはそこまでして、･･･、そこまでして戻りたくは、無いのね。ｚ" },
+        { text: "「･･･べーた？？」" },
+        { name: "べーた", text: "あんなに大切にしていた宝物までも･･･犠牲にして･･･ｋ" },
+        { text: "「･･･」" },
+        { name: "べーた", text: "ね、ほんとは思い出したんじゃないの？ｋ" },
+        { name: "べーた", text: "ここがどこなのか。なんでここにいるのか。ｋ" },
+        { text: "「･･･俺は･･･」" },
+        { type: "choice", options: ["そんなものは知らない。"] },
+        { name: "べーた", text: "あんたは、いつまでそうやって逃げ続けるつもり？k" },
+        { text: "「やめろ！！！！！！！」" },
+        { bgm: "music/huon.wav", text: "「ッあああああああああああああああああああ！！！！！！」" },
+        { text: "湧き出てくる嫌な記憶。思い出したくもない記憶が濁流のように押し寄せてくる。" },
+        { name: "べーた", text: "ッ！？k" },
+        { name: "べーた", text: "落ち着きなさい！！f" },
+        { text: "肩を激しくつかまれた俺は正気に戻る。" },
+        { type: "quake", se: "se/quake.wav",text: "グラグラグラグラッッッッ！！！！！！ｑ" },
+        { text: "今までにないほどに地面が揺れ、美術品が散乱し、美術館の壁が、床が崩壊していく。" },
+        { text: "「あ･･･あ･･･」" },
+        { text: "ほんとは全部知ってたんだ。ただ思い出したくなくて、逃げたくて、" },
+        { text: "俺は何も知らないことにしておこうと思ったんだ。" },
+        { text: "本当はべーただって───" },
+        { type: "flash", bgm: "music/muon.wav",se: "se/slap.wav", text: "パン！！！" },
+        { text: "地震とは別の衝撃が頭を揺さぶる。" },
+        { text: "ひりひりとした痛み、べーたの怒った顔。" },
+        { text: "そこでようやく、自分が頬を打たれたことに気がつく。" },
+        { name: "べーた", text: "いつまで悲劇のヒロインごっこをしているの！！そんなのは後からいくらでもできるわ！ｄ" },
+        { text: "「痛い･･･」" },
+        { name: "べーた", text: "あんたが今すべきことは、あれよ！！！f" },
+        { bg: "photo/bg_chaos.jpg", text: "べーたが指を指した方向に目をやる。ｑ" },
+        { text: "「あれは･･･」" },
+        { text: "形容しがたい暗闇が形をもっている。" },
+        { text: "さっきの「無」を塗りたくったような人間。" },
+        { text: "目についたものを破壊し尽くし、縦横無尽に飛び回っている。" },
+        { text: "「なんだ･･･？」" },
+        { name: "べーた", text: "あれは･･･私の妹みたいなもんよ。f" },
+        { text: "「妹？お前妹が居るのか？」" },
+        { name: "べーた", text: "いい？私がこの崩壊を止めるからあんたは１分、ここで引きつけなさい！ｆ" },
+        { text: "俺の問いかけなど無かったかのように話が進む。" },
+        { text: "精神上の世界ではいちいちツッコミを入れている暇はないらしい。" },
+        { text: "「引きつけるって･･･そんなん無理だよ」" },
+        { text: "「あいつビームみたいなのめっちゃ出してるし」" },
+        { name: "べーた", text: "無理って言うな！いい？攻撃を避けるだけで良いの。ｆ" },{ name: "べーた", text: "逃げるの得意でしょう？n" },
+        { text: "イヤミを言われた気がする。" },
+        { text: "「でも･･･」" },
+        { name: "べーた", text: "弱音を吐くな！ｄ" },
+        { name: "べーた", text: "これだから若い男は･･･ｆ" },
+        { text: "ぶつくさ何かを言っている。" },
+        { text: "その間にも化け物は美術館を無残に破壊していく。" },
+        { name: "べーた", text: "ほら、行くのよ！n" },
+        { text: "「･･･分かった。」" },
+        { text: "今までに無いべーたの真面目な表情に、俺も覚悟を決める。" },
+        { text: "真っ直ぐに黒い影を見据えると、べーたは頷いて反対方向に走り始める。q" },
+        { text: "同時に、黒い影がこちらを向く。" },
+        { text: "「ひっ」" },
+        { text: "怖い物は怖い。" },
+        { text: "しかしべーたと、この場所を守るために、自らを奮い立たせた。" },
+        { text: "「来い！！」" }
+    ];
+
+    let currentStep = 0;
+    let charIndex = 0;
+    let isTyping = false;
+    let typingTimer;
+    let currentFace = ''; 
+    let charVisible = false;
+    let currentBgmPath = "";
+    const bgmAudio = new Audio();
+    bgmAudio.loop = true;
+
+    const bgEl = document.getElementById('background');
+    const charEl = document.getElementById('character');
+    const nameEl = document.getElementById('name-tag');
+    const textEl = document.getElementById('text-display');
+    const choiceEl = document.getElementById('choices');
+    const container = document.getElementById('game-container');
+
+    function update() {
+        const step = rawScenario[currentStep];
+        if (!step) {
+            window.location.href = "danmaku.html";
+            return;
+        }
+
+        if (step.bgm && step.bgm !== currentBgmPath) {
+            currentBgmPath = step.bgm;
+            bgmAudio.pause();
+            if (step.bgm !== "music/muon.wav") {
+                bgmAudio.src = step.bgm;
+                bgmAudio.load();
+                bgmAudio.play().catch(() => {});
+            }
+        }
+
+        if (step.se) new Audio(step.se).play().catch(() => {});
+        if (step.bg) bgEl.style.backgroundImage = `url(${step.bg})`;
+        if (step.showChar) charVisible = true;
+
+        let rawText = step.text || "";
+        const lastChar = rawText.slice(-1);
+
+        if (faceMap[lastChar]) {
+            currentFace = faceMap[lastChar];
+            rawText = rawText.slice(0, -1);
+            charVisible = true;
+        } else if (lastChar === 'ｑ' || lastChar === 'q') {
+            charVisible = false;
+            rawText = rawText.slice(0, -1);
+        }
+
+        charEl.src = currentFace;
+        charEl.style.opacity = charVisible ? "1" : "0";
+        nameEl.textContent = step.name || "";
+        nameEl.style.display = step.name ? "block" : "none";
+        
+        container.classList.remove('quake', 'flash');
+        if (step.type === "quake") container.classList.add('quake');
+        if (step.type === "flash") container.classList.add('flash');
+
+        if (step.type === "choice") {
+            textEl.innerText = "";
+            showChoices(step);
+        } else {
+            startTyping(rawText);
+        }
+    }
+
+    function startTyping(text) {
+        clearInterval(typingTimer);
+        charIndex = 0;
+        textEl.innerText = "";
+        isTyping = true;
+        typingTimer = setInterval(() => {
+            if (charIndex < text.length) {
+                textEl.innerText += text[charIndex++];
+            } else {
+                clearInterval(typingTimer);
+                isTyping = false;
+            }
+        }, 30);
+    }
+
+    function showChoices(step) {
+        choiceEl.style.display = "flex";
+        choiceEl.innerHTML = "";
+        step.options.forEach((opt) => {
+            const btn = document.createElement('button');
+            btn.className = "choice-btn";
+            btn.textContent = opt;
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                choiceEl.style.display = "none";
+                currentStep++;
+                update();
+            };
+            choiceEl.appendChild(btn);
+        });
+    }
+
+    function next() {
+        if (rawScenario[currentStep] && rawScenario[currentStep].type === "choice") return;
+
+        if (isTyping) {
+            clearInterval(typingTimer);
+            isTyping = false;
+            let fullText = rawScenario[currentStep].text || "";
+            if (faceMap[fullText.slice(-1)] || fullText.slice(-1) === 'ｑ' || fullText.slice(-1) === 'q') fullText = fullText.slice(0, -1);
+            textEl.innerText = fullText;
+        } else {
+            currentStep++;
+            update();
+        }
+    }
+
+    container.onclick = () => {
+        if (bgmAudio.paused && currentBgmPath !== "" && currentBgmPath !== "music/muon.wav") {
+            bgmAudio.play().catch(() => {});
+        }
+        next();
+    };
+
+    update();
+</script>
+</body>
+</html>

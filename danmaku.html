@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; background: #000; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        body { margin: 0; background: #000; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; width: 100vw; }
+        
+        #scaler { display: flex; flex-direction: column; align-items: center; justify-content: center; transition: transform 0.1s; }
         
         #main-container { display: flex; align-items: center; gap: 20px; }
         #canvas-wrapper { position: relative; }
@@ -16,7 +18,7 @@
         #side-panel { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 300px; }
         #beta-portrait { width: 280px; height: 280px; }
         #beta-portrait img { width: 100%; height: 100%; object-fit: contain; }
-        #comment-display { width: 260px; background: rgba(0, 0, 0, 0.6); color: #fff; padding: 15px; border-radius: 5px; font-size: 16px; border: 1px solid #555; text-align: center; opacity: 0; transition: opacity 0.3s; }
+        #comment-display { width: 260px; background: rgba(0, 0, 0, 0.6); color: #fff; padding: 15px; border-radius: 5px; font-size: 16px; border: 1px solid #555; text-align: center; opacity: 0; transition: opacity 0.3s; min-height: 50px; }
         #comment-display.show { opacity: 1; }
         
         #ui-area { margin-top: 10px; }
@@ -25,18 +27,20 @@
     </style>
 </head>
 <body oncontextmenu="return false;">
-    <div id="main-container">
-        <div id="canvas-wrapper">
-            <div id="timer-display"></div>
-            <canvas id="canvas" width="400" height="400"></canvas>
+    <div id="scaler">
+        <div id="main-container">
+            <div id="canvas-wrapper">
+                <div id="timer-display"></div>
+                <canvas id="canvas" width="400" height="400"></canvas>
+            </div>
+            <div id="side-panel">
+                <div id="beta-portrait"><img id="beta-img" src="photo/beta_normal.png" alt="天野べーた"></div>
+                <div id="comment-display"></div>
+            </div>
         </div>
-        <div id="side-panel">
-            <div id="beta-portrait"><img id="beta-img" src="photo/beta_normal.png" alt="天野べーた"></div>
-            <div id="comment-display"></div>
+        <div id="ui-area">
+            <div class="pad-base" id="pad"><div class="pad-stick" id="stick"></div></div>
         </div>
-    </div>
-    <div id="ui-area">
-        <div class="pad-base" id="pad"><div class="pad-stick" id="stick"></div></div>
     </div>
 
 <script>
@@ -45,7 +49,17 @@
     const timerDisplay = document.getElementById('timer-display');
     const commentDisplay = document.getElementById('comment-display');
     const betaImg = document.getElementById('beta-img');
+    const scaler = document.getElementById('scaler');
     
+    function resize() {
+        const baseWidth = 720;
+        const baseHeight = 600;
+        const scale = Math.min(window.innerWidth / baseWidth, window.innerHeight / baseHeight) * 0.95;
+        scaler.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
     const bgImg = new Image();
     bgImg.src = "photo/bg_mu.jpg";
 
@@ -96,24 +110,29 @@
         }
     });
 
-    pad.addEventListener('pointermove', (e) => {
+    const handleInput = (e) => {
         const rect = pad.getBoundingClientRect();
-        const dx = e.clientX - (rect.left + 50), dy = e.clientY - (rect.top + 50);
-        const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 30);
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const dx = clientX - (rect.left + rect.width/2), dy = clientY - (rect.top + rect.height/2);
+        const dist = Math.min(Math.sqrt(dx*dx + dy*dy), (rect.width/100)*30);
         const angle = Math.atan2(dy, dx);
-        stick.style.left = (30 + (dist/30)*30 * Math.cos(angle)) + 'px';
-        stick.style.top = (30 + (dist/30)*30 * Math.sin(angle)) + 'px';
-        move = { x: (dist/30) * Math.cos(angle) * 0.6, y: (dist/30) * Math.sin(angle) * 0.6 };
-    });
+        const visualDist = (dist / (rect.width/100));
+        stick.style.left = (30 + visualDist * Math.cos(angle)) + 'px';
+        stick.style.top = (30 + visualDist * Math.sin(angle)) + 'px';
+        move = { x: (dist/(rect.width/2)) * 1.2 * Math.cos(angle), y: (dist/(rect.width/2)) * 1.2 * Math.sin(angle) };
+    };
 
-    pad.addEventListener('pointerup', () => { 
+    pad.addEventListener('pointerdown', handleInput);
+    window.addEventListener('pointermove', (e) => { if(e.buttons > 0 || e.touches) handleInput(e); });
+    window.addEventListener('pointerup', () => { 
         move = { x: 0, y: 0 }; stick.style.left = '30px'; stick.style.top = '30px'; 
     });
 
     function update() {
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, 400, 400);
-        ctx.drawImage(bgImg, 0, 0, 400, 400);
+        if(bgImg.complete) ctx.drawImage(bgImg, 0, 0, 400, 400);
 
         if (gameState !== 'playing') {
             bgm.pause();
@@ -160,15 +179,11 @@
             }
         });
 
-        // クリア処理：LIMIT到達でmap3.htmlへ移動
         if (time >= LIMIT) { 
             gameState = 'cleared'; 
             setExpression('clear'); 
             showComment("…やるじゃない。完璧よ。"); 
-            // 2秒後に自動でmap3.htmlへ遷移
-            setTimeout(() => {
-                window.location.href = "map3.html";
-            }, 2000);
+            setTimeout(() => { window.location.href = "map3.html"; }, 2000);
         }
         
         ctx.fillStyle = '#0f0'; ctx.fillRect(20, 20, (player.hp / player.maxHp) * 100, 10);

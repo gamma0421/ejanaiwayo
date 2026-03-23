@@ -2,9 +2,14 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>記憶の修復 - 修正テスト版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>記憶の修復</title>
     <style>
-        body { margin: 0; background: #0c0c0c; color: white; display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
+        * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; background: #0c0c0c; color: white; display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; font-family: sans-serif; overflow: hidden; }
+        
+        #scaler { display: flex; flex-direction: column; align-items: center; justify-content: center; transform-origin: center; }
+        
         #puzzle-area { position: relative; width: 800px; height: 600px; border: 1px solid #333; background: #111; }
         
         #target-container { 
@@ -40,23 +45,34 @@
             pointer-events: none; 
         }
 
-        #message { margin-top: 20px; font-size: 1.5rem; color: #0cf; min-height: 1.5em; }
+        #message { margin-bottom: 20px; font-size: 1.5rem; color: #0cf; min-height: 1.5em; text-align: center; }
+        #reset-btn { margin-top:10px; padding:10px 20px; cursor: pointer; background: #222; color: #fff; border: 1px solid #444; border-radius: 5px; }
     </style>
 </head>
-<body>
+<body oncontextmenu="return false;">
 
-    <div id="message">破片を枠の中に運びなさい。</div>
-
-    <div id="puzzle-area">
-        <div id="target-container"></div>
+    <div id="scaler">
+        <div id="message">破片を枠の中に運びなさい。</div>
+        <div id="puzzle-area">
+            <div id="target-container"></div>
+        </div>
+        <button id="reset-btn" onclick="location.reload()">リセット</button>
     </div>
-
-    <button style="margin-top:10px; padding:10px 20px; cursor: pointer;" onclick="location.reload()">リセット</button>
 
 <script>
     const ROWS = 3, COLS = 5, PIECE_SIZE = 100, OFFSET_X = 150, OFFSET_Y = 150, SNAP_DIST = 40;
     let completedPieces = 0;
     const totalPieces = ROWS * COLS;
+    const scaler = document.getElementById('scaler');
+
+    function resize() {
+        const baseWidth = 850;
+        const baseHeight = 750;
+        const scale = Math.min(window.innerWidth / baseWidth, window.innerHeight / baseHeight) * 0.95;
+        scaler.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', resize);
+    resize();
 
     function initPuzzle() {
         const area = document.getElementById('puzzle-area');
@@ -74,12 +90,11 @@
 
             const piece = document.createElement('div');
             piece.className = 'piece';
-            piece.style.backgroundImage = "url('photo/complete_image.jpg')"; 
+            piece.style.backgroundImage = "url('photo/bg_museum_normal.jpg')"; 
             piece.style.backgroundPosition = `-${targetX}px -${targetY}px`;
             
-            // 枠の外（左右の空きスペース）にバラけさせる
-            const startX = Math.random() < 0.5 ? Math.random() * 100 : 650 + Math.random() * 50;
-            const startY = Math.random() * 500;
+            const startX = Math.random() < 0.5 ? Math.random() * 80 : 620 + Math.random() * 80;
+            const startY = Math.random() * 450;
             piece.style.left = startX + 'px';
             piece.style.top = startY + 'px';
 
@@ -97,22 +112,22 @@
             isDragging = true;
             el.classList.add('dragging');
             
-            // ページ全体の座標から要素の左上座標を引いて、クリック位置を保持
             const rect = el.getBoundingClientRect();
-            startX = e.clientX - rect.left;
-            startY = e.clientY - rect.top;
+            const currentScale = scaler.getBoundingClientRect().width / scaler.offsetWidth;
+            startX = (e.clientX - rect.left) / currentScale;
+            startY = (e.clientY - rect.top) / currentScale;
             
-            // イベントをキャプチャ
             el.setPointerCapture(e.pointerId);
         };
 
         const onPointerMove = (e) => {
             if (!isDragging) return;
             
-            // 親要素（#puzzle-area）の相対座標を計算
             const areaRect = document.getElementById('puzzle-area').getBoundingClientRect();
-            let newX = e.clientX - areaRect.left - startX;
-            let newY = e.clientY - areaRect.top - startY;
+            const currentScale = scaler.getBoundingClientRect().width / scaler.offsetWidth;
+            
+            let newX = (e.clientX - areaRect.left) / currentScale - startX;
+            let newY = (e.clientY - areaRect.top) / currentScale - startY;
             
             el.style.left = newX + 'px';
             el.style.top = newY + 'px';
@@ -124,10 +139,9 @@
             el.classList.remove('dragging');
             el.releasePointerCapture(e.pointerId);
 
-            const curX = parseInt(el.style.left);
-            const curY = parseInt(el.style.top);
+            const curX = parseFloat(el.style.left);
+            const curY = parseFloat(el.style.top);
 
-            // 正解判定（指定の座標に近ければ吸着）
             if (Math.abs(curX - destX) < SNAP_DIST && Math.abs(curY - destY) < SNAP_DIST) {
                 el.style.left = destX + 'px';
                 el.style.top = destY + 'px';
@@ -138,6 +152,9 @@
                 completedPieces++;
                 if (completedPieces === totalPieces) {
                     document.getElementById('message').innerText = "……全部つながったわ。あんたにしては上出来ね。";
+                    setTimeout(() => {
+                        window.location.href = "map5.html";
+                    }, 2000);
                 }
             }
         };
